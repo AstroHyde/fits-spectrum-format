@@ -48,6 +48,14 @@ for spectrum in standardised_spectra:
     spectrum.writeto("19jan20015red_{FIBRE}.fits".format(**spectrum[0].header))
 ````
 
+Here is an example of what one spectrum looks like:
+````python
+In [5]: spectrum
+Out[5]: 
+[<astropy.io.fits.hdu.image.PrimaryHDU at 0x7fb256c05a10>,
+ <astropy.io.fits.hdu.image.ImageHDU at 0x7fb256c05ad0>]
+````
+
 Here are some example headers from an extracted standardised spectra (first extension):
 ````
 SIMPLE  =                    T / conforms to FITS standard                      
