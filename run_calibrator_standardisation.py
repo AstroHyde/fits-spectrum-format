@@ -15,7 +15,7 @@ import convert
 INPUT_PATH = "/Users/arc/research/galah/data/calibrators/2dfdr_input_data/"
 OUTPUT_PATH = "/Users/arc/research/galah/data/calibrators/2dfdr_standardised/"
 
-filenames = glob(os.path.join(INPUT_PATH, "*200*.fits"))
+filenames = glob(os.path.join(INPUT_PATH, "*.fits"))
 for filename in filenames:
     standardised_spectra = convert.from_2dfdr(filename)
 
