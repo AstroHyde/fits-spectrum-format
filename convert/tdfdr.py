@@ -21,6 +21,16 @@ import motions
 WG6_VER = 6.4
 WG6_GIT_HASH = check_output("git rev-parse --short HEAD".split()).strip()
 
+def get_ccd_number(image):
+    ccd_name = image[0].header.comments["SPLYTEMP"].split(" ")[0]
+    ccd_number = {
+        "BLUE": 1,
+        "GREEN": 2,
+        "RED": 3,
+        "IR": 4
+    }[ccd_name]
+
+    return (ccd_number, ccd_name)
 
 def verify_hermes_origin(image):
     assert image[0].header["ORIGIN"].strip() == "AAO"
@@ -147,6 +157,9 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
     for column in ("CDELT2", "CRPIX2", "CRVAL2", "CTYPE2", "CUNIT2"):
         del header_template[column]
 
+    ccd_number, ccd_name = get_ccd_number(image)
+    header_template["CCD"] = ccd_number
+    header_template.comments["CCD"] = "{0} camera".format(ccd_name)
     header_template["WG6_VER"] = WG6_VER
     header_template["WG6_HASH"] = WG6_GIT_HASH
     header_template.comments["WG6_VER"] = "WG6 standardisation code version"
