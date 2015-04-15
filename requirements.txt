@@ -1,0 +1,2 @@
+numpy
+astropy==1.0rc1
