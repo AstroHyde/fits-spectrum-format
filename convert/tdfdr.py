@@ -18,8 +18,8 @@ from astropy.constants import c as speed_of_light
 import motions
 
 # [TODO] Read the GAP version from elsewhere.
-GAP_VER = 6.4
-GAP_GIT_HASH = check_output("git rev-parse --short HEAD".split()).strip()
+WG6_VER = 6.4
+WG6_GIT_HASH = check_output("git rev-parse --short HEAD".split()).strip()
 
 
 def verify_hermes_origin(image):
@@ -47,7 +47,72 @@ def read_2dfdr_extensions(image):
     return extensions
 
 
-def from_2dfdr(reduced_filename):
+def dummy_normalisation_hdus(hdulist=None):
+    """
+    Return dummy HDUs for the normalised flux and associated uncertainty.
+    """
+
+    # Return a dummy normalisation HDU
+    hdu_normed_flux = fits.ImageHDU(data=None, header=None,
+        do_not_scale_image_data=True)
+
+    # Add header information
+    if hdulist is not None:
+        for key in ("CRVAL1", "CDELT1", "CRPIX1", "CTYPE1", "CUNIT1"):
+            hdu_normed_flux.header[key] = hdulist[0].header[key]
+            hdu_normed_flux.header.comments[key] = hdulist[0].header.comments[key]
+
+    hdu_normed_flux.header["EXTNAME"] = "normalised_spectrum"
+    hdu_normed_flux.header.comments["EXTNAME"] = "Normalised spectrum flux"
+    hdu_normed_flux.add_checksum()
+
+    hdu_normed_sigma = fits.ImageHDU(data=None, header=None,
+        do_not_scale_image_data=True)
+
+    # Add header information
+    if hdulist is not None:
+        for key in ("CRVAL1", "CDELT1", "CRPIX1", "CTYPE1", "CUNIT1"):
+            hdu_normed_sigma.header[key] = hdulist[0].header[key]
+            hdu_normed_sigma.header.comments[key] = hdulist[0].header.comments[key]
+
+    hdu_normed_sigma.header["EXTNAME"] = "normalised_sigma"
+    hdu_normed_sigma.header.comments["EXTNAME"] = "Normalised flux sigma"
+    hdu_normed_sigma.add_checksum()
+
+    return [hdu_normed_flux, hdu_normed_sigma]
+
+
+def dummy_ccf_hdu(hdulist=None):
+    """
+    Return a dummy HDU for the best-fitting cross-correlation function.
+    """
+
+    hdu_ccf = fits.ImageHDU(data=None, header=None,
+        do_not_scale_image_data=True)
+
+    hdu_ccf.header["EXTNAME"] = "CCF"
+    hdu_ccf.header.comments["EXTNAME"] = "CCF from best-fitting template"
+
+    # Add empty default values.
+    default_headers = [
+        ("VRAD", "Radial velocity (km/s)"),
+        ("U_VRAD", "Uncertainty on radial velocity (km/s)"),
+        ("TEFF", "Effective temperature"),
+        ("LOGG", "Surface gravity"),
+        ("FE_H", "Metallicity ([Fe/H])"),
+        ("ALPHA_FE", "Alpha-enhancement ([alpha/Fe])")
+    ]
+    for key, comment in default_headers:
+        hdu_ccf.header[key] = "NaN"
+        hdu_ccf.header.comments[key] = comment
+    
+    hdu_ccf.add_checksum()
+
+    return hdu_ccf
+    
+
+
+def from_2dfdr(reduced_filename, dummy_hdus=True):
     """
     Returns a list of `astropy.io.fits.hdu.hdulist.HDUList` objects
     (1 HDU List per 2dfdr program object).
@@ -82,10 +147,10 @@ def from_2dfdr(reduced_filename):
     for column in ("CDELT2", "CRPIX2", "CRVAL2", "CTYPE2", "CUNIT2"):
         del header_template[column]
 
-    header_template["GAP_VER"] = GAP_VER
-    header_template["GAP_HASH"] = GAP_GIT_HASH
-    header_template.comments["GAP_VER"] = "GALAH Analysis Pipeline version"
-    header_template.comments["GAP_HASH"] = "GALAH Analysis Pipeline commit hash"
+    header_template["WG6_VER"] = WG6_VER
+    header_template["WG6_HASH"] = WG6_GIT_HASH
+    header_template.comments["WG6_VER"] = "WG6 standardisation code version"
+    header_template.comments["WG6_HASH"] = "WG6 standardisation commit hash"
 
     extracted_sources = []
     for program_index in np.where(image[ext["fibres"]].data["TYPE"] == "P")[0]:
@@ -117,30 +182,40 @@ def from_2dfdr(reduced_filename):
         hdu_flux = fits.PrimaryHDU(data=flux, header=header,
             do_not_scale_image_data=True)
         hdu_flux.header["EXTNAME"] = "input_spectrum"
-        hdu_flux.header.comments["EXTNAME"] = "Rebinned spectrum"
+        hdu_flux.header.comments["EXTNAME"] = "Spectrum flux"
 
-        hdu_sigma = fits.ImageHDU(data=variance**0.5, header=header,
+        hdu_sigma = fits.ImageHDU(data=variance**0.5, header=None,
             do_not_scale_image_data=True)
+        
+        for key in ("CRVAL1", "CDELT1", "CRPIX1", "CTYPE1", "CUNIT1"):
+            hdu_sigma.header[key] = hdu_flux.header[key]
+            hdu_sigma.header.comments[key] = hdu_flux.header.comments[key]
         hdu_sigma.header["EXTNAME"] = "input_sigma"
-        hdu_sigma.header.comments["EXTNAME"] = "Rebinned sigma"
+        hdu_sigma.header.comments["EXTNAME"] = "Flux sigma"
 
         # Calculate the barycentric motion.
         v_bary, v_helio = motions.from_header(header)
+
+        hdu_flux.header["V_BARY"] = v_bary.to("km/s").value
+        hdu_flux.header["V_HELIO"] = v_helio.to("km/s").value
+        hdu_flux.header.comments["V_BARY"] = "Barycentric motion (km/s)"
+        hdu_flux.header.comments["V_HELIO"] = "Heliocentric motion (km/s)"
+        hdu_flux.header["HISTORY"] = "Corrected for barycentric motion (V_BARY)"
 
         # Add motion correction information.
         for hdu in (hdu_flux, hdu_sigma):
             hdu.header["CRVAL1"] *= 1. + (v_bary/speed_of_light).value
             hdu.header["CDELT1"] *= 1. + (v_bary/speed_of_light).value
 
-            hdu.header["V_BARY"] = v_bary.to("km/s").value
-            hdu.header["V_HELIO"] = v_helio.to("km/s").value
-            hdu.header.comments["V_BARY"] = "Barycentric motion (km/s)"
-            hdu.header.comments["V_HELIO"] = "Heliocentric motion (km/s)"
-            hdu.header["HISTORY"] = "Corrected for barycentric motion (V_BARY)"
-
         # Create HDUList and add checksums.
         hdulist = fits.HDUList([hdu_flux, hdu_sigma])
         [hdu.add_checksum() for hdu in hdulist]
+
+        # Add dummy extensions
+        if dummy_hdus:
+            hdulist.extend(dummy_normalisation_hdus(hdulist))
+            hdulist.append(dummy_ccf_hdu(hdulist))
+
         extracted_sources.append(hdulist)
 
     image.close()
