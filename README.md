@@ -61,6 +61,6 @@ Here are the names for each extension (header keyword `EXTNAME`):
 - `normalised_sigma`: Sigma on normalised spectrum flux
 - `CCF`: Cross-correlation function from best-fitting template
 
-Note that we have `normalised_flux` and `normalised_sigma` extensions, but because the data have not been normalised yet, there are currently no data in those extensions. You can check to see if there is any data in an extension by checking the `DATASUM` header keyword. When `DATASUM` is zero, there are no data for that extension. We place dummy extensions here so that the analysis groups can be sure they are always referencing the correct data extension.
+Note that we have `normalised_flux`, `normalised_sigma`, and `CCF` extensions, but because we haven't normalised or cross-correlated the spectrum yet, there are currently no data in those extensions. You can check to see if there is any data in an extension by checking the `DATASUM` header keyword. When `DATASUM` is zero, there are no data for that extension. We place dummy extensions here so that the analysis groups can be sure they are always referencing the correct data extension. (This is a lesson learned from the Gaia-ESO Survey inserting extensions over time, ruffling feathers with the analysis groups)
 
-Once Jane Lin's code (or ``oracle``) has run over the standardised FITS files, these `normalised_flux`, `normalised_sigma`, and `CCF` extensions will have data present.
+Once ``GUESS`` (Lin & Ireland) or ``oracle`` (Casey) has run over the standardised FITS files, these `normalised_flux`, `normalised_sigma`, and `CCF` extensions will have data present.
