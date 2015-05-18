@@ -7,6 +7,7 @@ from __future__ import division
 
 __author__ = "Andy Casey <arc@ast.cam.ac.uk>"
 
+import os
 from glob import glob
 
 import convert
@@ -34,6 +35,8 @@ for i, folder in enumerate(folders):
             else:
 
                 # Extract the 1D spectra.
+                print("\t\t\tLoading {}".format(fits_filename[0]))
+
                 spectra = convert.from_2dfdr(fits_filename[0])
                 for spectrum in spectra:
 
@@ -48,8 +51,8 @@ for i, folder in enumerate(folders):
                         name = "FIB{0}".format(spectrum[0].header["FIBRE"])
 
                     output_filename = os.path.join(output_path, 
-                        "{0}{1}_{2}.fits".format(date + fco, ccd, name))
+                        "{0}{1}_{2}.fits".format(date * 1000 + fco, ccd, name))
 
-                    print("\t\t\tCreated file {}".format(output_filename))
+                    print("\t\t\t\tCreated file {}".format(output_filename))
                     spectrum.writeto(output_filename)
 
