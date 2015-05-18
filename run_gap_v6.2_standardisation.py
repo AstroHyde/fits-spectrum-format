@@ -23,6 +23,7 @@ for i, folder in enumerate(folders):
         fco_folders = sorted(glob("{0}ccd_{1}/*/".format(folder, ccd)))
 
         for fco, fco_folder in enumerate(fco_folders, start=1):
+            if fco_folder.split("/")[-2].lower() == "bias": continue
 
             fits_filename = glob("{0}/*_combined.fits".format(fco_folder))
             
@@ -38,6 +39,8 @@ for i, folder in enumerate(folders):
                 print("\t\t\tLoading {}".format(fits_filename[0]))
 
                 spectra = convert.from_2dfdr(fits_filename[0])
+                print("\t\t\tFound {} program fibres:".format(len(spectra)))
+                
                 for spectrum in spectra:
 
                     #(YYMMDD*1000+night_fco_id)
