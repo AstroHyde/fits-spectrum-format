@@ -121,7 +121,20 @@ def dummy_ccf_hdu(hdulist=None):
     hdu_ccf.add_checksum()
 
     return hdu_ccf
+
+
+def dummy_no_sky_hdu(hdulist=None):
+    """
+    Return a dummy HDU for the spectrum before sky subtraction.
+    """
+
+    hdu_sky = fits.ImageHDU(data=None, header=None,
+        do_not_scale_image_data=True)
+    hdu_sky.header["EXTNAME"] = "no_sky"
+    hdu_sky.header.comments["EXTNAME"] = "Spectrum before sky subtraction"
     
+    hdu_sky.add_checksum()
+    return hdu_sky
 
 
 def from_2dfdr(reduced_filename, dummy_hdus=True):
@@ -229,14 +242,7 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
         if dummy_hdus:
             hdulist.extend(dummy_normalisation_hdus(hdulist))
             hdulist.append(dummy_ccf_hdu(hdulist))
-
-        # Add median sky hdu
-        hdu_sky = fits.ImageHDU(
-            data=np.nan * np.ones(image[ext["data"]].data.shape[1]),
-            header=None, do_not_scale_image_data=True)
-        hdu_sky.header["EXTNAME"] = "no_sky"
-        hdu_sky.header.comments["EXTNAME"] = "Spectrum before sky subtraction"
-        hdulist.append(hdu_sky)
+            hdulist.append(dummy_no_sky_hdu(hdulist))
 
         extracted_sources.append(hdulist)
 
