@@ -17,19 +17,21 @@ from astropy.io import fits
 from astropy.constants import c as speed_of_light
 import motions
 
-# [TODO] Read the GAP version from elsewhere.
-WG6_VER = 6.4
 WG6_GIT_HASH = check_output("git rev-parse --short HEAD".split()).strip()
 
 def get_ccd_number(image):
-    ccd_name = image[0].header.comments["SPLYTEMP"].split(" ")[0]
-    ccd_number = {
-        "BLUE": 1,
-        "GREEN": 2,
-        "RED": 3,
-        "IR": 4
-    }[ccd_name]
-
+    crval1 = image[0].header["CRVAL1"]
+    #4801, 5760, 6610, 7741
+    if crval1 > 7000:
+        ccd_number, ccd_name = 4, "IR"
+    elif crval1 > 6000:
+        ccd_number, ccd_name = 3, "RED",
+    elif crval1 > 5000:
+        ccd_number, ccd_name = 2, "GREEN",
+    elif crval1 > 4000:
+        ccd_number, ccd_name = 1, "BLUE"
+    else:
+        raise ValueError("CRVAL1 value is weird: {0}".format(crval1))
     return (ccd_number, ccd_name)
 
 def verify_hermes_origin(image):
@@ -68,9 +70,9 @@ def dummy_normalisation_hdus(hdulist=None):
 
     # Add header information
     if hdulist is not None:
-        for key in ("CRVAL1", "CDELT1", "CRPIX1", "CTYPE1", "CUNIT1"):
-            hdu_normed_flux.header[key] = hdulist[0].header[key]
-            hdu_normed_flux.header.comments[key] = hdulist[0].header.comments[key]
+        for k in ("CRVAL1", "CDELT1", "CRPIX1", "CTYPE1", "CUNIT1"):
+            hdu_normed_flux.header[k] = hdulist[0].header[k]
+            hdu_normed_flux.header.comments[k] = hdulist[0].header.comments[k]
 
     hdu_normed_flux.header["EXTNAME"] = "normalised_spectrum"
     hdu_normed_flux.header.comments["EXTNAME"] = "Normalised spectrum flux"
@@ -81,9 +83,9 @@ def dummy_normalisation_hdus(hdulist=None):
 
     # Add header information
     if hdulist is not None:
-        for key in ("CRVAL1", "CDELT1", "CRPIX1", "CTYPE1", "CUNIT1"):
-            hdu_normed_sigma.header[key] = hdulist[0].header[key]
-            hdu_normed_sigma.header.comments[key] = hdulist[0].header.comments[key]
+        for k in ("CRVAL1", "CDELT1", "CRPIX1", "CTYPE1", "CUNIT1"):
+            hdu_normed_sigma.header[k] = hdulist[0].header[k]
+            hdu_normed_sigma.header.comments[k] = hdulist[0].header.comments[k]
 
     hdu_normed_sigma.header["EXTNAME"] = "normalised_sigma"
     hdu_normed_sigma.header.comments["EXTNAME"] = "Normalised flux sigma"
@@ -160,10 +162,16 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
     ccd_number, ccd_name = get_ccd_number(image)
     header_template["CCD"] = ccd_number
     header_template.comments["CCD"] = "{0} camera".format(ccd_name)
-    header_template["WG6_VER"] = WG6_VER
     header_template["WG6_HASH"] = WG6_GIT_HASH
-    header_template.comments["WG6_VER"] = "WG6 standardisation code version"
     header_template.comments["WG6_HASH"] = "WG6 standardisation commit hash"
+
+    # Get the median sky flux
+    sky_fibres = np.where(image[ext["fibres"]].data["TYPE"] == "S")[0]
+    if not sky_fibres:
+        median_sky_flux = np.nan * np.ones(image[ext["data"]].data.shape[1])
+    else:
+        median_sky_flux = np.nanmedian(image[ext["data"]].data[sky_fibres, :],
+            axis=0)
 
     extracted_sources = []
     for program_index in np.where(image[ext["fibres"]].data["TYPE"] == "P")[0]:
@@ -213,12 +221,13 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
         hdu_flux.header["V_HELIO"] = v_helio.to("km/s").value
         hdu_flux.header.comments["V_BARY"] = "Barycentric motion (km/s)"
         hdu_flux.header.comments["V_HELIO"] = "Heliocentric motion (km/s)"
-        hdu_flux.header["HISTORY"] = "Corrected for barycentric motion (V_BARY)"
+        hdu_flux.header["HISTORY"] \
+            = "Corrected for heliocentric motion (V_HELIO)"
 
         # Add motion correction information.
         for hdu in (hdu_flux, hdu_sigma):
-            hdu.header["CRVAL1"] *= 1. + (v_bary/speed_of_light).value
-            hdu.header["CDELT1"] *= 1. + (v_bary/speed_of_light).value
+            hdu.header["CRVAL1"] *= 1. + (v_helio/speed_of_light).value
+            hdu.header["CDELT1"] *= 1. + (v_helio/speed_of_light).value
 
         # Create HDUList and add checksums.
         hdulist = fits.HDUList([hdu_flux, hdu_sigma])
@@ -228,6 +237,14 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
         if dummy_hdus:
             hdulist.extend(dummy_normalisation_hdus(hdulist))
             hdulist.append(dummy_ccf_hdu(hdulist))
+
+        # Add median sky hdu
+        hdu_sky = fits.ImageHDU(data=median_sky_flux, header=None,
+            do_not_scale_image_data=True)
+        hdu_sky.header["EXTNAME"] = "median_sky"
+        hdu_sky.header.comments["EXTNAME"] \
+            = "Median sky flux from {} fibres".format(sky_fibres.size)
+        hdulist.append(hdu_sky)
 
         extracted_sources.append(hdulist)
 
