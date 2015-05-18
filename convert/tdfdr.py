@@ -164,15 +164,7 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
     header_template.comments["CCD"] = "{0} camera".format(ccd_name)
     header_template["WG6_HASH"] = WG6_GIT_HASH
     header_template.comments["WG6_HASH"] = "WG6 standardisation commit hash"
-
-    # Get the median sky flux
-    sky_fibres = np.where(image[ext["fibres"]].data["TYPE"] == "S")[0]
-    if not sky_fibres:
-        median_sky_flux = np.nan * np.ones(image[ext["data"]].data.shape[1])
-    else:
-        median_sky_flux = np.nanmedian(image[ext["data"]].data[sky_fibres, :],
-            axis=0)
-
+    
     extracted_sources = []
     for program_index in np.where(image[ext["fibres"]].data["TYPE"] == "P")[0]:
 
@@ -239,11 +231,11 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
             hdulist.append(dummy_ccf_hdu(hdulist))
 
         # Add median sky hdu
-        hdu_sky = fits.ImageHDU(data=median_sky_flux, header=None,
-            do_not_scale_image_data=True)
-        hdu_sky.header["EXTNAME"] = "median_sky"
-        hdu_sky.header.comments["EXTNAME"] \
-            = "Median sky flux from {} fibres".format(sky_fibres.size)
+        hdu_sky = fits.ImageHDU(
+            data=np.nan * np.ones(image[ext["data"]].data.shape[1]),
+            header=None, do_not_scale_image_data=True)
+        hdu_sky.header["EXTNAME"] = "no_sky"
+        hdu_sky.header.comments["EXTNAME"] = "Spectrum before sky subtraction"
         hdulist.append(hdu_sky)
 
         extracted_sources.append(hdulist)
