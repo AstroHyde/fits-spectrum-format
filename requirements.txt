@@ -1,2 +1,2 @@
-numpy
+numpy==1.9.2
 astropy==1.0rc1
