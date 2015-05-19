@@ -5,25 +5,14 @@ This repository describes the GALAH FITS-file format and provides tools to deal 
 
 Stacked spectra from a single epoch (e.g., 3 sequential GALAH observations) of the same field will be reduced by  multiple reduction pipelines. Once reduced, they should be converted to the FITS format below so that we have 1 file per star per setup (e.g., `STAR_X_blue.fits`). At this stage the FITS files will have the following extensions:
 
-- Flux (barycentric-corrected wavelengths)
+- Flux (heliocentric-corrected wavelengths)
 - Sigma
-- Normalised flux (barycentric-corrected wavelengths)
+- Normalised flux (heliocentric-corrected wavelengths)
 - Normalised sigma
 - Cross-Correlation Function (CCF) from best-fitting template, including associated information
+- Flux before sky subtraction
 
-For multiple exposures over different epochs, the data will be stacked together and there will be more extensions present:
-
-- Stacked flux (barycentric-corrected wavelengths)
-- Stacked sigma
-- Stacked normalised flux (barycentric-corrected wavelengths)
-- Stacked normalised sigma
-- Cross-Correlation Function (CCF) from best-fitting template, including associated information
-- Flux from epoch 1 (barycentric-corrected wavelengths)
-- Sigma from epoch 1
-- Flux from epoch 2 (barycentric-corrected wavelengths)
-- Sigma from epoch 2
-
-So **if you want the best flux, you should always take the data from the first extension** (and associated uncertainties from the second extension). Similarly **if you want the best normalised flux you should always take the data from the third extension**. This is the data format that will go the analysis nodes.
+So **if you want flux, you should always take the data from the first extension** (and associated uncertainties from the second extension). Similarly **if you want normalised flux you should always take the data from the third extension**. This is the data format that will go the analysis nodes.
 
 # Conversion Example
 
