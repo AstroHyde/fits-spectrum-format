@@ -132,6 +132,11 @@ def initial_guess(filename_mask):
             sj, ej = np.searchsorted(obs_dispersion, mask_region)
             ccf_flux_data[sj:ej] = np.nan
 
+        ccf_flux_data[ccf_flux_data <= 0] = np.nan
+
+        if not np.any(np.isfinite(ccf_flux_data)):
+            continue
+        
         v, v_err, R = specutils.ccf.cross_correlate(
             obs_dispersion, ccf_flux_data, model_wavelengths[si:ei],
             model_intensities[:, si:ei], rebin="observed", rebin_method="fast",
