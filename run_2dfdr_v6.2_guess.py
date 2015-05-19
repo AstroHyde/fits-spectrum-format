@@ -13,6 +13,7 @@ __author__ = "Andy Casey <arc@ast.cam.ac.uk>"
 
 import cPickle as pickle
 import matplotlib
+import multiprocessing as mp
 import os
 from collections import OrderedDict
 from glob import glob
@@ -33,6 +34,7 @@ simplefilter("ignore", np.RankWarning)
 c = speed_of_light.to("km/s").value
 
 # CONTROLS
+THREADS = 10
 CREATE_FIGURES = True
 UPDATE_FILES = False
 SAVE_BEST_FIT_MODELS = False
@@ -76,10 +78,9 @@ with open("galah-ambre-grid.pkl", "rb") as fp:
     model_grid, model_wavelengths, model_intensities, pixels = pickle.load(fp)
     model_intensities = model_intensities.reshape(model_grid.size, sum(pixels))
 
-# Create a set of rows to store tabular data in.
-N, rows = len(unique_filename_masks), []
-for i, filename_mask in enumerate(unique_filename_masks):
-    print("At star {0}/{1}: {2}".format(i + 1, N, filename_mask))
+
+def initial_guess(filename_mask):
+    print("At star {0}".format(filename_mask))
 
     # get the spectra
     filenames = glob(os.path.join(standardised_file_folder, filename_mask))
@@ -114,7 +115,7 @@ for i, filename_mask in enumerate(unique_filename_masks):
         ccf_flux_data = image[0].data.copy()
         for mask_region in ccf_mask:
             sj, ej = np.searchsorted(obs_dispersion, mask_region)
-            ccf_flux_data = np.nan
+            ccf_flux_data[sj:ej] = np.nan
 
         v, v_err, R = specutils.ccf.cross_correlate(
             obs_dispersion, ccf_flux_data, model_wavelengths[si:ei],
@@ -284,7 +285,7 @@ for i, filename_mask in enumerate(unique_filename_masks):
     galah_id = image[0].header["NAME"].split("_")[1] \
         if image[0].header["NAME"].lower().startswith("galahic_") else -1
 
-    rows.append(OrderedDict([
+    return OrderedDict([
         ("RA", image[0].header["RA"]),
         ("DEC", image[0].header["DEC"]),
         ("NAME", image[0].header["NAME"]),
@@ -307,7 +308,16 @@ for i, filename_mask in enumerate(unique_filename_masks):
         ("CCF_LOGG", best_model[1]),
         ("CCF_FEH", best_model[2]),
         ("CCF_R_CHI_SQ", np.round(chi_sqs[index]/dofs[index], 2))
-        ]))
+        ])
+
+pool = mp.Pool(THREADS)
+
+N, processes = len(unique_filename_masks), []
+for i, filename_mask in enumerate(unique_filename_masks):
+    print("Distributing {0}/{1}: {2}".format(i, N, filename_mask))
+    processes.append(pool.apply_async(initial_guess, args=(filename_mask, )))
+
+rows = [p.get() for p in processes]
 
 # Create table and save to disk
 table = Table(rows=rows, names=rows[0].keys())
