@@ -205,6 +205,7 @@ def initial_guess(filename_mask):
         index = np.nanargmin(chi_sqs/dofs)
         best_model = model_grid[best_model_indices[index]]
         coefficients = all_coefficients[index]
+        r_chi_sq = np.round(chi_sqs[index]/dofs[index], 2)
 
         # Update the images with the CCF information.
         for image in images:
@@ -230,71 +231,73 @@ def initial_guess(filename_mask):
             image[2].add_checksum()
             image[3].add_checksum()
 
+
+        if CREATE_FIGURES:
+            fig, axes = plt.subplots(4)
+            fig.subplots_adjust()
+            model_hdus = []
+            for ax, coeff, image in zip(axes, coefficients, images):
+
+                disp = image[0].header["CRVAL1"] + image[0].header["CDELT1"] \
+                        * (np.arange(image[0].data.size) - image[0].header["CRPIX1"])
+
+                if coeff is not None:
+                    continuum = np.polyval(coeff, disp)
+                else:
+                    continuum = 1.
+
+                ax.fill_between(disp, (image[0].data - image[1].data)/continuum,
+                    (image[0].data + image[1].data)/continuum, facecolor="#BBBBBB",
+                    edgecolor="#BBBBBB")
+                ax.plot(disp, image[0].data/continuum, c='k')
+
+                ccd = image[0].header["CCD"]
+                si, ei = map(sum, (pixels[:ccd - 1], pixels[:ccd]))
+
+                if coeff is not None:
+
+                    mod_intensities = model_intensities[best_model_indices[index], si:ei]
+                    # Apply chi-sq mask.
+                    for mask_region in chi_sq_mask:
+                        sj, ej = np.searchsorted(
+                            model_wavelengths[si:ei] * (1. + v_median/c), mask_region)
+                        mod_intensities[sj:ej] = np.nan
+
+                    resampled_mod_intensities = np.interp(disp,
+                        model_wavelengths[si:ei] * (1. + v_median/c),
+                        mod_intensities, left=np.nan, right=np.nan) * continuum
+
+                    ax.plot(model_wavelengths[si:ei] * (1. + v_median/c), mod_intensities, c='r')
+
+                    ax.set_ylim(0, 1.2)
+                    ax.set_yticks([0, 0.25, 0.50, 0.75, 1.0])
+
+                ax.set_xlim(disp[0], disp[-1])
+            
+            if len(ccf_results) > 0:
+                axes[0].set_title("TEFF / LOGG / [FE/H] = {0:.0f} / {1:.2f} / {2:.2f} with"\
+                    " chi^2/d.o.f = {3:.1f}/{4:.0f} = {5:.1f}".format(
+                        best_model[0], best_model[1], best_model[2],
+                        chi_sqs[index], dofs[index], chi_sqs[index]/dofs[index]),
+                    size=10)
+
+            axes[-1].set_xlabel("Wavelength")
+            fig.tight_layout()
+            figure_filename = os.path.join(output_figures_folder,
+                filename_mask.replace("?", "X").replace(".fits", ".png"))
+            fig.savefig(figure_filename)
+            print("Created figure {}".format(figure_filename))
+            plt.close("all")
+
     else:
-        coefficients = [None] * len(images)
+        r_chi_sq = np.nan
+        v_median, v_err_median = np.nan, np.nan
+        best_model = (np.nan, np.nan, np.nan)
 
     if UPDATE_FILES:
         for image, filename in zip(images, filenames):
             print("Updated {}".format(filename))
             image.writeto(filename, clobber=True)
-
-    # Create an image.
-    if CREATE_FIGURES:
-        fig, axes = plt.subplots(4)
-        fig.subplots_adjust()
-        model_hdus = []
-        for ax, coeff, image in zip(axes, coefficients, images):
-
-            disp = image[0].header["CRVAL1"] + image[0].header["CDELT1"] \
-                    * (np.arange(image[0].data.size) - image[0].header["CRPIX1"])
-
-            if coeff is not None:
-                continuum = np.polyval(coeff, disp)
-            else:
-                continuum = 1.
-
-            ax.fill_between(disp, (image[0].data - image[1].data)/continuum,
-                (image[0].data + image[1].data)/continuum, facecolor="#BBBBBB",
-                edgecolor="#BBBBBB")
-            ax.plot(disp, image[0].data/continuum, c='k')
-
-            ccd = image[0].header["CCD"]
-            si, ei = map(sum, (pixels[:ccd - 1], pixels[:ccd]))
-
-            if coeff is not None:
-
-                mod_intensities = model_intensities[best_model_indices[index], si:ei]
-                # Apply chi-sq mask.
-                for mask_region in chi_sq_mask:
-                    sj, ej = np.searchsorted(
-                        model_wavelengths[si:ei] * (1. + v_median/c), mask_region)
-                    mod_intensities[sj:ej] = np.nan
-
-                resampled_mod_intensities = np.interp(disp,
-                    model_wavelengths[si:ei] * (1. + v_median/c),
-                    mod_intensities, left=np.nan, right=np.nan) * continuum
-
-                ax.plot(model_wavelengths[si:ei] * (1. + v_median/c), mod_intensities, c='r')
-
-                ax.set_ylim(0, 1.2)
-                ax.set_yticks([0, 0.25, 0.50, 0.75, 1.0])
-
-            ax.set_xlim(disp[0], disp[-1])
-        
-        if len(ccf_results) > 0:
-            axes[0].set_title("TEFF / LOGG / [FE/H] = {0:.0f} / {1:.2f} / {2:.2f} with"\
-                " chi^2/d.o.f = {3:.1f}/{4:.0f} = {5:.1f}".format(
-                    best_model[0], best_model[1], best_model[2],
-                    chi_sqs[index], dofs[index], chi_sqs[index]/dofs[index]),
-                size=10)
-
-        axes[-1].set_xlabel("Wavelength")
-        fig.tight_layout()
-        figure_filename = os.path.join(output_figures_folder,
-            filename_mask.replace("?", "X").replace(".fits", ".png"))
-        fig.savefig(figure_filename)
-        print("Created figure {}".format(figure_filename))
-        plt.close("all")
 
     # Create a table row with heaps of relevant information.
     # FILENAME, RA, DEC, TOTALEXP, NAME, GALAH_ID, UTSTART, UTEND, UTDATE, RUN,
@@ -325,21 +328,18 @@ def initial_guess(filename_mask):
         ("CCF_TEFF", best_model[0]),
         ("CCF_LOGG", best_model[1]),
         ("CCF_FEH", best_model[2]),
-        ("CCF_R_CHI_SQ", np.round(chi_sqs[index]/dofs[index], 2))
+        ("CCF_R_CHI_SQ", r_chi_sq)
         ])
 
 if THREADS > 1:
-
     pool = mp.Pool(THREADS)
-
     N, processes = len(unique_filename_masks), []
     for i, filename_mask in enumerate(unique_filename_masks):
         print("Distributing {0}/{1}: {2}".format(i, N, filename_mask))
         processes.append(pool.apply_async(initial_guess, args=(filename_mask, )))
-        if i > 1000:
+        if i > 10:
             print("breking")
             break
-
 
     rows = [p.get() for p in processes]
 
@@ -352,6 +352,10 @@ else:
     for i, filename_mask in enumerate(unique_filename_masks):
         row = initial_guess(filename_mask)
         rows.append(row)
+
+        if i > 10:
+            print("breking")
+            break
 
 # Create table and save to disk
 table = Table(rows=rows, names=rows[0].keys())
