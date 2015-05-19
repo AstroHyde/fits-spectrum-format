@@ -149,6 +149,12 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
         hdu_flux.header["V_HELIO"] = np.round(v_helio.to("km/s").value, 2)
         hdu_flux.header.comments["V_BARY"] = "Barycentric motion (km/s)"
         hdu_flux.header.comments["V_HELIO"] = "Heliocentric motion (km/s)"
+
+        # Just to be consistent with the IRAF pipeline
+        hdu_flux.header["WG6_VHEL"] = True
+        hdu_flux.header.comments["WG6_VHEL"] \
+            = "Was the V_HELIO correction calculated by WG6?"
+
         hdu_flux.header["HISTORY"] \
             = "Corrected for heliocentric motion (V_HELIO)"
 
