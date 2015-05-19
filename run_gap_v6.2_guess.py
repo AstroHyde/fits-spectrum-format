@@ -77,8 +77,9 @@ with open("galah-ambre-grid.pkl", "rb") as fp:
     model_intensities = model_intensities.reshape(model_grid.size, sum(pixels))
 
 # Create a set of rows to store tabular data in.
-rows = []
+N, rows = len(unique_filename_masks), []
 for i, filename_mask in enumerate(unique_filename_masks):
+    print("At star {0}/{1}: {2}".format(i + 1, N, filename_mask))
 
     # get the spectra
     filenames = glob(os.path.join(standardised_file_folder, filename_mask))
