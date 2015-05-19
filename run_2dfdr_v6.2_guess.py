@@ -319,6 +319,9 @@ for i, filename_mask in enumerate(unique_filename_masks):
 
 rows = [p.get() for p in processes]
 
+pool.close()
+pool.join()
+
 # Create table and save to disk
 table = Table(rows=rows, names=rows[0].keys())
 table.write("GALAH_iDR1_2DFDR_Summary.fits")
