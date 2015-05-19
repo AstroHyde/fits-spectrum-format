@@ -236,7 +236,11 @@ def initial_guess(filename_mask):
             fig, axes = plt.subplots(4)
             fig.subplots_adjust()
             model_hdus = []
-            for ax, coeff, image in zip(axes, coefficients, images):
+            for i, (ax, coeff, image) in enumerate(zip(axes, coefficients, images)):
+
+                ccd = image[0].header["CCD"]
+                if ccd != i + 1:
+                    continue
 
                 disp = image[0].header["CRVAL1"] + image[0].header["CDELT1"] \
                         * (np.arange(image[0].data.size) - image[0].header["CRPIX1"])
@@ -246,12 +250,13 @@ def initial_guess(filename_mask):
                 else:
                     continuum = 1.
 
-                ax.fill_between(disp, (image[0].data - image[1].data)/continuum,
-                    (image[0].data + image[1].data)/continuum, facecolor="#BBBBBB",
-                    edgecolor="#BBBBBB")
+                finite = np.isfinite(image[0].data + image[1].data)
+                ax.fill_between(disp[finite],
+                    ((image[0].data - image[1].data)/continuum)[finite],
+                    ((image[0].data + image[1].data)/continuum)[finite],
+                    facecolor="#BBBBBB", edgecolor="#BBBBBB")
                 ax.plot(disp, image[0].data/continuum, c='k')
 
-                ccd = image[0].header["CCD"]
                 si, ei = map(sum, (pixels[:ccd - 1], pixels[:ccd]))
 
                 if coeff is not None:
@@ -306,6 +311,13 @@ def initial_guess(filename_mask):
     galah_id = image[0].header["NAME"].split("_")[1] \
         if image[0].header["NAME"].lower().startswith("galahic_") else -1
 
+    mean_counts = []
+    for i in range(4):
+        if i + 1 in ccds:
+            mean_counts.append(np.nanmean(images[i][0].data))
+        else:
+            mean_counts.append(np.nan)
+
     return OrderedDict([
         ("RA", image[0].header["RA"]),
         ("DEC", image[0].header["DEC"]),
@@ -325,6 +337,10 @@ def initial_guess(filename_mask):
         ("GREEN_ARM", 2 in ccds),
         ("RED_ARM", 3 in ccds),
         ("IR_ARM", 4 in ccds),
+        ("MEAN_COUNTS_BLUE", mean_counts[0]),
+        ("MEAN_COUNTS_GREEN", mean_counts[1]),
+        ("MEAN_COUNTS_RED", mean_counts[2]),
+        ("MEAN_COUNTS_IR", mean_counts[3]),
         ("CCF_TEFF", best_model[0]),
         ("CCF_LOGG", best_model[1]),
         ("CCF_FEH", best_model[2]),
