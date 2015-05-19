@@ -160,8 +160,11 @@ def cross_correlate(observed_dispersion, observed_flux, template_dispersion,
         ccf *= (h/ccf.max())
         
         z[i] = z_array[ccf.argmax()]
-        z_err[i] = (np.ptp(z_array[np.where(ccf >= 0.5*h)])/2.35482)**2
         R[i] = h
+        try:
+            z_err[i] = (np.ptp(z_array[np.where(ccf >= 0.5*h)])/2.35482)**2
+        except:
+            continue 
         
     return (z * c, z_err * c, R)
 

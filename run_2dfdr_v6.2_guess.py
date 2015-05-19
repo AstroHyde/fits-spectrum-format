@@ -33,6 +33,7 @@ simplefilter("ignore", np.RankWarning)
 c = speed_of_light.to("km/s").value
 
 # CONTROLS
+CREATE_FIGURES = True
 UPDATE_FILES = False
 SAVE_BEST_FIT_MODELS = False
 continuum_degree = {
@@ -209,57 +210,58 @@ for i, filename_mask in enumerate(unique_filename_masks):
         image[3].add_checksum()
 
     # Create an image.
-    fig, axes = plt.subplots(4)
-    fig.subplots_adjust()
-    model_hdus = []
-    for ax, coeff, image in zip(axes, coefficients, images):
+    if CREATE_FIGURES:
+        fig, axes = plt.subplots(4)
+        fig.subplots_adjust()
+        model_hdus = []
+        for ax, coeff, image in zip(axes, coefficients, images):
 
-        disp = image[0].header["CRVAL1"] + image[0].header["CDELT1"] \
-                * (np.arange(image[0].data.size) - image[0].header["CRPIX1"])
-        continuum = np.polyval(coeff, disp)
+            disp = image[0].header["CRVAL1"] + image[0].header["CDELT1"] \
+                    * (np.arange(image[0].data.size) - image[0].header["CRPIX1"])
+            continuum = np.polyval(coeff, disp)
 
-        ax.fill_between(disp, (image[0].data - image[1].data)/continuum,
-            (image[0].data + image[1].data)/continuum, facecolor="#BBBBBB",
-            edgecolor="#BBBBBB")
-        ax.plot(disp, image[0].data/continuum, c='k')
+            ax.fill_between(disp, (image[0].data - image[1].data)/continuum,
+                (image[0].data + image[1].data)/continuum, facecolor="#BBBBBB",
+                edgecolor="#BBBBBB")
+            ax.plot(disp, image[0].data/continuum, c='k')
 
-        ccd = image[0].header["CCD"]
-        si, ei = map(sum, (pixels[:ccd - 1], pixels[:ccd]))
+            ccd = image[0].header["CCD"]
+            si, ei = map(sum, (pixels[:ccd - 1], pixels[:ccd]))
 
-        mod_intensities = model_intensities[best_model_indices[index], si:ei]
-        # Apply chi-sq mask.
-        for mask_region in chi_sq_mask:
-            sj, ej = np.searchsorted(
-                model_wavelengths[si:ei] * (1. + v_median/c), mask_region)
-            mod_intensities[sj:ej] = np.nan
+            mod_intensities = model_intensities[best_model_indices[index], si:ei]
+            # Apply chi-sq mask.
+            for mask_region in chi_sq_mask:
+                sj, ej = np.searchsorted(
+                    model_wavelengths[si:ei] * (1. + v_median/c), mask_region)
+                mod_intensities[sj:ej] = np.nan
 
-        resampled_mod_intensities = np.interp(disp,
-            model_wavelengths[si:ei] * (1. + v_median/c),
-            mod_intensities, left=np.nan, right=np.nan) * continuum
-            
-        if SAVE_BEST_FIT_MODELS:
-            hdu = fits.PrimaryHDU if ax == axes[0] else fits.ImageHDU
-            model_hdus.append(hdu(data=resampled_mod_intensities,
-                header=image[0].header, do_not_scale_image_data=True))
+            resampled_mod_intensities = np.interp(disp,
+                model_wavelengths[si:ei] * (1. + v_median/c),
+                mod_intensities, left=np.nan, right=np.nan) * continuum
+                
+            if SAVE_BEST_FIT_MODELS:
+                hdu = fits.PrimaryHDU if ax == axes[0] else fits.ImageHDU
+                model_hdus.append(hdu(data=resampled_mod_intensities,
+                    header=image[0].header, do_not_scale_image_data=True))
 
-        ax.plot(disp, resampled_mod_intensities, c='r')
+            ax.plot(disp, resampled_mod_intensities, c='r')
 
-        ax.set_xlim(disp[0], disp[-1])
-        ax.set_ylim(0, 1.2)
-        ax.set_yticks([0, 0.25, 0.50, 0.75, 1.0])
+            ax.set_xlim(disp[0], disp[-1])
+            ax.set_ylim(0, 1.2)
+            ax.set_yticks([0, 0.25, 0.50, 0.75, 1.0])
 
-    axes[0].set_title("TEFF / LOGG / [FE/H] = {0:.0f} / {1:.2f} / {2:.2f} with"\
-        " chi^2/d.o.f = {3:.1f}/{4:.0f} = {5:.1f}".format(
-            best_model[0], best_model[1], best_model[2],
-            chi_sqs[index], dofs[index], chi_sqs[index]/dofs[index]),
-        size=10)
-    axes[-1].set_xlabel("Wavelength")
-    fig.tight_layout()
-    figure_filename = os.path.join(output_figures_folder,
-        filename_mask.replace("?", "X").replace(".fits", ".png"))
-    fig.savefig(figure_filename)
-    print("Created figure {}".format(figure_filename))
-    plt.close("all")
+        axes[0].set_title("TEFF / LOGG / [FE/H] = {0:.0f} / {1:.2f} / {2:.2f} with"\
+            " chi^2/d.o.f = {3:.1f}/{4:.0f} = {5:.1f}".format(
+                best_model[0], best_model[1], best_model[2],
+                chi_sqs[index], dofs[index], chi_sqs[index]/dofs[index]),
+            size=10)
+        axes[-1].set_xlabel("Wavelength")
+        fig.tight_layout()
+        figure_filename = os.path.join(output_figures_folder,
+            filename_mask.replace("?", "X").replace(".fits", ".png"))
+        fig.savefig(figure_filename)
+        print("Created figure {}".format(figure_filename))
+        plt.close("all")
 
     if UPDATE_FILES:
         for image, filename in zip(images, filenames):
