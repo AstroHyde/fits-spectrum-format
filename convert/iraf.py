@@ -197,7 +197,7 @@ def from_iraf(reduced_filename, fibre_table, dummy_hdus=True,
 
             # Since we have this value, update the headers accordingly.
             hdu_flux.header["V_HELIO"] = np.round(-koz_dopcor, 2)
-            hdu_flux.header["V_HEL_RC"] = False
+            hdu_flux.header["WG6_VHEL"] = False
 
         # The IRAF reductions come corrected for heliocentric motion, so we do
         # not need to apply any correction.
