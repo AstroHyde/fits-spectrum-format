@@ -18,7 +18,6 @@ import multiprocessing as mp
 import logging
 import os
 import traceback
-from collections import OrderedDict
 from glob import glob
 from multiprocessing.pool import Pool
 from warnings import simplefilter
@@ -27,7 +26,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
-from astropy.table import Table
 from astropy.constants import c as speed_of_light
 
 import specutils
@@ -39,6 +37,7 @@ c = speed_of_light.to("km/s").value
 
 # CONTROLS
 THREADS = 1
+CLOBBER = False # If False this will skip files that have a normalised spectrum.
 CREATE_FIGURES = False
 UPDATE_FILES = False
 continuum_degree = {
@@ -68,7 +67,7 @@ def trace_unhandled_exceptions(func):
         try:
             func(*args, **kwargs)
         except:
-            print 'Exception in '+func.__name__
+            print("Exception in {}".format(func.__name__))
             traceback.print_exc()
     return wrapped_func
 
@@ -92,15 +91,26 @@ with open("galah-ambre-grid.pkl", "rb") as fp:
     model_grid, model_wavelengths, model_intensities, pixels = pickle.load(fp)
     model_intensities = model_intensities.reshape(model_grid.size, sum(pixels))
 
-
-def initial_guess(filename_mask):
-    print("At star {0}".format(filename_mask))
+@trace_unhandled_exceptions
+def initial_guess(filename_mask, statement=None):
+    print("At star {0} {1}".format(filename_mask, statement))
 
     # get the spectra
     filenames = sorted(glob(os.path.join(standardised_file_folder, filename_mask)))
 
     print("Found {0} spectra matching mask {1}".format(len(filenames),
         filename_mask))
+
+    images = []
+    for i, filename in enumerate(filenames):
+        images.append(fits.open(filename))
+        # Check the normalised extension for data
+        if i == 0 and images[-1][2].data is not None and not CLOBBER:
+            images[-1].close()
+            return None
+
+
+
 
     images = map(fits.open, filenames)
 
@@ -306,67 +316,21 @@ def initial_guess(filename_mask):
             print("Updated {}".format(filename))
             image.writeto(filename, clobber=True)
 
-    # Create a table row with heaps of relevant information.
-    # FILENAME, RA, DEC, TOTALEXP, NAME, GALAH_ID, UTSTART, UTEND, UTDATE, RUN,
-    # OBSNUM, FIBRE, PMRA, PMDEC, MAG, DESCR, V_HELIO, V_RAD, E_V_RAD,
-    # BLUE_ARM, GREEN_ARM, RED_ARM, IR_ARM, CCF_TEFF, CCF_LOGG, CCF_FEH, CCF_R_CHI_SQ
-    galah_id = image[0].header["NAME"].split("_")[1] \
-        if image[0].header["NAME"].lower().startswith("galahic_") else -1
+    [image.close() for image in images]
+    return None
 
-    mean_counts = []
-    for i in range(4):
-        if i + 1 in ccds:
-            mean_counts.append(np.nanmean(images[ccds.index(i + 1)][0].data))
-        else:
-            mean_counts.append(np.nan)
 
-    return OrderedDict([
-        ("RA", image[0].header["RA"]),
-        ("DEC", image[0].header["DEC"]),
-        ("NAME", image[0].header["NAME"]),
-        ("GALAH_ID", galah_id),
-        ("TEMP_UID", filename_mask[:-5]),
-        ("FILENAME", "|".join(sorted(map(os.path.basename, filenames)))),
-        ("FIBRE", image[0].header["FIBRE"]),
-        ("PMRA", image[0].header["PMRA"]),
-        ("PMDEC", image[0].header["PMDEC"]),
-        ("MAG", image[0].header["MAG"]),
-        ("DESCR", image[0].header["DESCR"]),
-        ("V_HELIO", image[0].header["V_HELIO"]),
-        ("V_RAD", v_median),
-        ("E_V_RAD", v_err_median),
-        ("BLUE_ARM", 1 in ccds),
-        ("GREEN_ARM", 2 in ccds),
-        ("RED_ARM", 3 in ccds),
-        ("IR_ARM", 4 in ccds),
-        ("MEAN_COUNTS_BLUE", mean_counts[0]),
-        ("MEAN_COUNTS_GREEN", mean_counts[1]),
-        ("MEAN_COUNTS_RED", mean_counts[2]),
-        ("MEAN_COUNTS_IR", mean_counts[3]),
-        ("CCF_TEFF", best_model[0]),
-        ("CCF_LOGG", best_model[1]),
-        ("CCF_FEH", best_model[2]),
-        ("CCF_R_CHI_SQ", r_chi_sq)
-        ])
-
+N = len(unique_filename_masks)
 if THREADS > 1:
     pool = mp.Pool(THREADS)
-    N, processes = len(unique_filename_masks), []
     for i, filename_mask in enumerate(unique_filename_masks):
         print("Distributing {0}/{1}: {2}".format(i, N, filename_mask))
-        processes.append(pool.apply_async(initial_guess, args=(filename_mask, )))
-        if i > 1000:
-            print("breking")
-            break
-
-    rows = [p.get() for p in processes]
-
+        pool.apply_async(initial_guess, args=(filename_mask, i, ))
+        
     pool.close()
     pool.join()
 
 else:
-    N = len(unique_filename_masks)
-    rows = []
     ok = False
     for i, filename_mask in enumerate(unique_filename_masks):
         if filename_mask == "140611006?_1641513.fits":
@@ -374,11 +338,58 @@ else:
         else:
             if not ok:
                 continue
-        row = initial_guess(filename_mask)
-        rows.append(row)
+        initial_guess(filename_mask, i)
 
 
+
+"""
+# Quickly load the files and generate the table we want.
+
+# Create a table row with heaps of relevant information.
+# FILENAME, RA, DEC, TOTALEXP, NAME, GALAH_ID, UTSTART, UTEND, UTDATE, RUN,
+# OBSNUM, FIBRE, PMRA, PMDEC, MAG, DESCR, V_HELIO, V_RAD, E_V_RAD,
+# BLUE_ARM, GREEN_ARM, RED_ARM, IR_ARM, CCF_TEFF, CCF_LOGG, CCF_FEH, CCF_R_CHI_SQ
+galah_id = image[0].header["NAME"].split("_")[1] \
+    if image[0].header["NAME"].lower().startswith("galahic_") else -1
+
+mean_counts = []
+for i in range(4):
+    if i + 1 in ccds:
+        mean_counts.append(np.nanmean(images[ccds.index(i + 1)][0].data))
+    else:
+        mean_counts.append(np.nan)
+"""
+"""
+return OrderedDict([
+    ("RA", image[0].header["RA"]),
+    ("DEC", image[0].header["DEC"]),
+    ("NAME", image[0].header["NAME"]),
+    ("GALAH_ID", galah_id),
+    ("TEMP_UID", filename_mask[:-5]),
+    ("FILENAME", "|".join(sorted(map(os.path.basename, filenames)))),
+    ("FIBRE", image[0].header["FIBRE"]),
+    ("PMRA", image[0].header["PMRA"]),
+    ("PMDEC", image[0].header["PMDEC"]),
+    ("MAG", image[0].header["MAG"]),
+    ("DESCR", image[0].header["DESCR"]),
+    ("V_HELIO", image[0].header["V_HELIO"]),
+    ("V_RAD", v_median),
+    ("E_V_RAD", v_err_median),
+    ("BLUE_ARM", 1 in ccds),
+    ("GREEN_ARM", 2 in ccds),
+    ("RED_ARM", 3 in ccds),
+    ("IR_ARM", 4 in ccds),
+    ("MEAN_COUNTS_BLUE", mean_counts[0]),
+    ("MEAN_COUNTS_GREEN", mean_counts[1]),
+    ("MEAN_COUNTS_RED", mean_counts[2]),
+    ("MEAN_COUNTS_IR", mean_counts[3]),
+    ("CCF_TEFF", best_model[0]),
+    ("CCF_LOGG", best_model[1]),
+    ("CCF_FEH", best_model[2]),
+    ("CCF_R_CHI_SQ", r_chi_sq)
+    ])
+"""
 # Create table and save to disk
-table = Table(rows=rows, names=rows[0].keys())
-table.write("GALAH_iDR1_2DFDR_Summary.fits")
+#table = Table(rows=rows, names=rows[0].keys())
+#table.write("GALAH_iDR1_2DFDR_Summary.fits")
 
