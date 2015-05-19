@@ -147,6 +147,8 @@ def initial_guess(filename_mask):
             R[~((vrad_limits[1] > v) * (v > vrad_limits[0]))] = np.nan
 
         # Get the best value by the CCF peak.
+        if not np.any(np.isfinite(R)):
+            continue
         index = np.nanargmax(R)
         ccf_results[filename] = (v[index], v_err[index], R[index], index)
 
@@ -314,7 +316,7 @@ def initial_guess(filename_mask):
     mean_counts = []
     for i in range(4):
         if i + 1 in ccds:
-            mean_counts.append(np.nanmean(images[i][0].data))
+            mean_counts.append(np.nanmean(images[ccds.index(i + 1)][0].data))
         else:
             mean_counts.append(np.nan)
 
@@ -353,7 +355,7 @@ if THREADS > 1:
     for i, filename_mask in enumerate(unique_filename_masks):
         print("Distributing {0}/{1}: {2}".format(i, N, filename_mask))
         processes.append(pool.apply_async(initial_guess, args=(filename_mask, )))
-        if i > 10:
+        if i > 1000:
             print("breking")
             break
 
@@ -365,13 +367,16 @@ if THREADS > 1:
 else:
     N = len(unique_filename_masks)
     rows = []
+    ok = False
     for i, filename_mask in enumerate(unique_filename_masks):
+        if filename_mask == "140611006?_1641513.fits":
+            ok = True
+        else:
+            if not ok:
+                continue
         row = initial_guess(filename_mask)
         rows.append(row)
 
-        if i > 10:
-            print("breking")
-            break
 
 # Create table and save to disk
 table = Table(rows=rows, names=rows[0].keys())

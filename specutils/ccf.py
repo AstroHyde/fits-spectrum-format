@@ -69,8 +69,9 @@ def cross_correlate(observed_dispersion, observed_flux, template_dispersion,
     # Slice the edges to avoid nans.
     finite = np.where(np.isfinite(observed_flux))[0]
     if not any(finite):
-        logger.info("No finite pixels in {0}".format(filename))
-        raise WTFError
+        return (np.nan * np.ones(template_fluxes.shape[0]),
+            np.nan * np.ones(template_fluxes.shape[0]),
+            np.nan * np.ones(template_fluxes.shape[0]))
 
     ii, ij = finite[0], finite[-1]
     dispersion = dispersion[ii:ij + 1]
