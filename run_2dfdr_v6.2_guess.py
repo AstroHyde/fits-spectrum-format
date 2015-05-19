@@ -12,11 +12,15 @@ respond.
 __author__ = "Andy Casey <arc@ast.cam.ac.uk>"
 
 import cPickle as pickle
+import functools
 import matplotlib
 import multiprocessing as mp
+import logging
 import os
+import traceback
 from collections import OrderedDict
 from glob import glob
+from multiprocessing.pool import Pool
 from warnings import simplefilter
 matplotlib.use("Agg")
 
@@ -34,8 +38,8 @@ simplefilter("ignore", np.RankWarning)
 c = speed_of_light.to("km/s").value
 
 # CONTROLS
-THREADS = 10
-CREATE_FIGURES = True
+THREADS = 1
+CREATE_FIGURES = False
 UPDATE_FILES = False
 SAVE_BEST_FIT_MODELS = False
 continuum_degree = {
@@ -57,8 +61,19 @@ standardised_file_folder = "/home/acasey/miner3/galah/standardised_spectra/2dfdr
 output_figures_folder = "/home/acasey/miner3/galah/standardised_spectra/2dfdr_v6.2_figures/"
 output_models_folder = ""
 
-
 # CODE
+
+def trace_unhandled_exceptions(func):
+    @functools.wraps(func)
+    def wrapped_func(*args, **kwargs):
+        try:
+            func(*args, **kwargs)
+        except:
+            print 'Exception in '+func.__name__
+            traceback.print_exc()
+    return wrapped_func
+
+
 def get_unique_id(filename):
     base = filename.split("/")[-1]
     date_fco_ccd, fib_galah_id = base.split("_")
@@ -83,7 +98,7 @@ def initial_guess(filename_mask):
     print("At star {0}".format(filename_mask))
 
     # get the spectra
-    filenames = glob(os.path.join(standardised_file_folder, filename_mask))
+    filenames = sorted(glob(os.path.join(standardised_file_folder, filename_mask)))
 
     print("Found {0} spectra matching mask {1}".format(len(filenames),
         filename_mask))
@@ -245,7 +260,7 @@ def initial_guess(filename_mask):
                 model_hdus.append(hdu(data=resampled_mod_intensities,
                     header=image[0].header, do_not_scale_image_data=True))
 
-            ax.plot(disp, resampled_mod_intensities, c='r')
+            ax.plot(model_wavelengths[si:ei] * (1. + v_median/c), mod_intensities, c='r')
 
             ax.set_xlim(disp[0], disp[-1])
             ax.set_ylim(0, 1.2)
@@ -310,17 +325,30 @@ def initial_guess(filename_mask):
         ("CCF_R_CHI_SQ", np.round(chi_sqs[index]/dofs[index], 2))
         ])
 
-pool = mp.Pool(THREADS)
+if THREADS > 1:
 
-N, processes = len(unique_filename_masks), []
-for i, filename_mask in enumerate(unique_filename_masks):
-    print("Distributing {0}/{1}: {2}".format(i, N, filename_mask))
-    processes.append(pool.apply_async(initial_guess, args=(filename_mask, )))
+    pool = mp.Pool(THREADS)
 
-rows = [p.get() for p in processes]
+    N, processes = len(unique_filename_masks), []
+    for i, filename_mask in enumerate(unique_filename_masks):
+        print("Distributing {0}/{1}: {2}".format(i, N, filename_mask))
+        processes.append(pool.apply_async(initial_guess, args=(filename_mask, )))
+        if i > 1000:
+            print("breking")
+            break
 
-pool.close()
-pool.join()
+
+    rows = [p.get() for p in processes]
+
+    pool.close()
+    pool.join()
+
+else:
+    N = len(unique_filename_masks)
+    rows = []
+    for i, filename_mask in enumerate(unique_filename_masks):
+        row = initial_guess(filename_mask)
+        rows.append(row)
 
 # Create table and save to disk
 table = Table(rows=rows, names=rows[0].keys())
