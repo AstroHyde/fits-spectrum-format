@@ -20,9 +20,9 @@ folders = sorted(glob("/priv/miner3/galah/galahsk/GAP/tdfdr_data/*/"))
 
 def convert_and_save(fits_filename, fco, ccd):
 
-    print("\t\t\tLoading {}".format(fits_filename[0]))
+    print("\t\t\tLoading {}".format(fits_filename))
 
-    spectra = convert.from_2dfdr(fits_filename[0])
+    spectra = convert.from_2dfdr(fits_filename)
     print("\t\t\tFound {} program fibres:".format(len(spectra)))
 
     for spectrum in spectra:
@@ -68,10 +68,9 @@ for i, folder in enumerate(folders):
             elif len(fits_filename) > 1:
                 raise WTFError()
             else:
-
                 # Extract the 1D spectra.
-                pool.apply_async(convert_and_save, args=(fits_filename[0],
-                    fco, ccd))
+                pool.apply_async(convert_and_save,
+                    args=(fits_filename[0], fco, ccd))
 
 pool.close()
 pool.join()
