@@ -50,9 +50,8 @@ chi_sq_mask = [
 ]
 
 vrad_limits = (-1000, 1000)
-standardised_file_folder = "/home/acasey/miner3/galah/standardised_spectra/gap_v6.2/"
-standardised_file_folder = ""
-output_figures_folder = ""
+standardised_file_folder = "/home/acasey/miner3/galah/standardised_spectra/2dfdr_v6.2/"
+output_figures_folder = "/home/acasey/miner3/galah/standardised_spectra/2dfdr_v6.2_figures/"
 output_models_folder = ""
 
 

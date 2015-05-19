@@ -5,5 +5,5 @@
 
 __author__ = "Andy Casey <arc@ast.cam.ac.uk>"
 
-from .iraf import from_iraf
+#from .iraf import from_iraf
 from .tdfdr import from_2dfdr
