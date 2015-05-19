@@ -89,6 +89,12 @@ def from_iraf(reduced_filename, fibre_table, dummy_hdus=True,
     extracted_sources = []
     for apid in [_ for _ in image[0].header.keys() if _.startswith("APID")]:
 
+        fibre_name = image[0].header[apid]
+        # Skip sky or dead fibres
+        if fibre_name.startswith("FIBRE NOT IN USE") \
+        or fibre_name.startswith("skyv1_"):
+            continue
+
         # APID1 == index 0
         apid = int(apid[4:].strip())
         program_index = apid - 1
