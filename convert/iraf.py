@@ -13,7 +13,6 @@ import os
 import numpy as np
 
 from astropy.io import fits
-from astropy.constants import c as speed_of_light
 
 import motions
 import utils
@@ -177,13 +176,14 @@ def from_iraf(reduced_filename, fibre_table, dummy_hdus=True,
         hdu_flux.header["V_HELIO"] = np.round(v_helio.to("km/s").value, 2)
         hdu_flux.header.comments["V_BARY"] = "Barycentric motion (km/s)"
         hdu_flux.header.comments["V_HELIO"] = "Heliocentric motion (km/s)"
-        hdu_flux.header["HISTORY"] \
-            = "Corrected for heliocentric motion (V_HELIO)"
 
         # For provenance..
         hdu_flux.header["WG6_VHEL"] = True
         hdu_flux.header.comments["WG6_VHEL"] \
-            = "Was the V_HELIO correction re-calculated by WG6"
+            = "Was the V_HELIO correction calculated by WG6?"
+
+        hdu_flux.header["HISTORY"] \
+            = "Corrected for heliocentric motion (V_HELIO)"
 
         if "DOPCOR{:02d}".format(apid) in image[0].header:
             koz_dopcor = image[0].header["DOPCOR{:02d}".format(apid)]
