@@ -41,7 +41,9 @@ continuum_degree = {
     3: 4,
     4: 3
 }
-ccf_mask = None
+ccf_mask = [
+    [7500, 7700]
+]
 chi_sq_mask = [
     [7590, 7617],
     [7620, 7700]
@@ -107,8 +109,14 @@ for i, filename_mask in enumerate(unique_filename_masks):
         ccd = image[0].header["CCD"]
         si, ei = map(sum, (pixels[:ccd - 1], pixels[:ccd]))
 
+        # Apply the CCF mask.
+        ccf_flux_data = image[0].data.copy()
+        for mask_region in ccf_mask:
+            sj, ej = np.searchsorted(obs_dispersion, mask_region)
+            ccf_flux_data = np.nan
+
         v, v_err, R = specutils.ccf.cross_correlate(
-            obs_dispersion, image[0].data, model_wavelengths[si:ei],
+            obs_dispersion, ccf_flux_data, model_wavelengths[si:ei],
             model_intensities[:, si:ei], rebin="observed", rebin_method="fast",
             ccf_method="fast", continuum_degree=continuum_degree[ccd])
 
