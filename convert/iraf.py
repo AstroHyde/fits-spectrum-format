@@ -145,7 +145,7 @@ def from_iraf(reduced_filename, fibre_table, dummy_hdus=True,
         # 2DFDR (and the subsequent standard format) uses 2048 as their CRPIX1
         # value, but I have already processed the 2DFDR stuff, so we will just
         # 'homogenise' this a little bit in the next processing version.
-        hdu_flux.header["CRPIX1"] = 0.0
+        hdu_flux.header["CRPIX1"] = 0
         hdu_flux.header.comments["CRPIX1"] = "Reference pixel along axis 1"
         hdu_flux.header["CTYPE1"] = "Wavelength"
         hdu_flux.header.comments["CTYPE1"] = "Label for axis 1"
