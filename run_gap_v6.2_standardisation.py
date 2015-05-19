@@ -18,7 +18,7 @@ output_path = "/priv/miner3/skymap/acasey/galah/standardised_spectra/gap_v6.2/"
 folders = sorted(glob("/priv/miner3/galah/galahsk/GAP/tdfdr_data/*/"))
 
 
-def convert_and_save(fits_filename, output_filename, fco, ccd):
+def convert_and_save(fits_filename, fco, ccd):
 
     print("\t\t\tLoading {}".format(fits_filename[0]))
 
@@ -27,7 +27,7 @@ def convert_and_save(fits_filename, output_filename, fco, ccd):
 
     for spectrum in spectra:
 
-        #(YYMMDD*1000+night_fco_id)
+        #YYMMDD*1000 + night_fco_id*10 + ccd + "_" + galah_id
         date = int(spectrum[0].header["FILEORIG"].split("/")[4])
         name = spectrum[0].header.get("NAME", None)
 
@@ -71,7 +71,7 @@ for i, folder in enumerate(folders):
 
                 # Extract the 1D spectra.
                 pool.apply_async(convert_and_save, args=(fits_filename[0],
-                    output_filename, fco, ccd))
-                
+                    fco, ccd))
+
 pool.close()
 pool.join()

@@ -3,7 +3,7 @@
 
 from __future__ import division, print_function
 
-""" Heliocentric and Barycentric velocity corrections """
+""" Celestial body calculations and corrections """
 
 __author__ = "Andy Casey <arc@ast.cam.ac.uk>"
 
@@ -11,7 +11,7 @@ __author__ = "Andy Casey <arc@ast.cam.ac.uk>"
 # attributable to: Sergey Koposov, Kochukho, Kudryavtsev, W. Landsman, 
 # Chris McCarthy, and Jeff Valenti.
 
-__all__ = ["baryvel", "corrections", "from_header"]
+__all__ = ["baryvel", "corrections", "sol_corrections", "moon_distance"]
 
 # Third-party
 import numpy as np
@@ -19,7 +19,44 @@ import numpy as np
 import astropy.constants as constants
 import astropy.coordinates as coord
 import astropy.units as u
+import ephem
 from astropy.time import Time
+
+
+def moon_distance(headers):
+    """
+    Calculate the distance to the moon (in degrees) at the time of observations.
+
+    """
+
+    moon = ephem.Moon()
+
+    observer = ephem.Observer()
+    # Position (irrelevant, but whatever).
+    observer.elevation = headers["ALT_OBS"]
+    observer.lon, observer.lat = headers["LONG_OBS"], headers["LAT_OBS"]
+
+    # Calculate it at the start of the exposure.
+    start_time = "{0} {1}".format(headers["UTDATE"].replace(":", "/"),
+        headers["UTSTART"])
+    end_time = "{0} {1}".format(headers["UTDATE"].replace(":", "/"),
+        headers["UTEND"])
+
+    distances = []
+    for observer_time in (start_time, end_time):
+
+        observer.date = observer_time
+        observer.epoch = observer_time
+
+        # Compute the position
+        moon.compute(observer)
+        moon_ra, moon_dec = moon.ra * 180./np.pi, moon.dec * 180./np.pi
+
+        # Distance to the MEANRA, MEANDEC position?
+        distances.append(np.sqrt((moon_ra - headers["MEANRA"])**2 \
+            + (moon_dec - headers["MEANDEC"])**2))
+
+    return np.round(max(distances), 1)
 
 
 def baryvel(dje):
@@ -351,7 +388,7 @@ def corrections(lon, lat, alt, ra, dec, mjd):
 
 
 
-def from_header(header):
+def sol_corrections(header):
 
     alt_obs = header.get("ALT_OBS", None)
     lat_obs = header.get("LAT_OBS", None)

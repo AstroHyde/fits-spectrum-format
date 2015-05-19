@@ -9,15 +9,12 @@ __author__ = "Andy Casey <arc@ast.cam.ac.uk>"
 
 __all__ = ["from_2dfdr"]
 
-from subprocess import check_output
-
 import numpy as np
 
 from astropy.io import fits
 from astropy.constants import c as speed_of_light
 import motions
-
-WG6_GIT_HASH = check_output("git rev-parse --short HEAD".split()).strip()
+import utils
 
 def get_ccd_number(image):
     crval1 = image[0].header["CRVAL1"]
@@ -33,10 +30,6 @@ def get_ccd_number(image):
     else:
         raise ValueError("CRVAL1 value is weird: {0}".format(crval1))
     return (ccd_number, ccd_name)
-
-def verify_hermes_origin(image):
-    assert image[0].header["ORIGIN"].strip() == "AAO"
-    assert image[0].header["INSTRUME"].strip() == "HERMES-2dF"
 
 
 def read_2dfdr_extensions(image):
@@ -59,84 +52,6 @@ def read_2dfdr_extensions(image):
     return extensions
 
 
-def dummy_normalisation_hdus(hdulist=None):
-    """
-    Return dummy HDUs for the normalised flux and associated uncertainty.
-    """
-
-    # Return a dummy normalisation HDU
-    hdu_normed_flux = fits.ImageHDU(data=None, header=None,
-        do_not_scale_image_data=True)
-
-    # Add header information
-    if hdulist is not None:
-        for k in ("CRVAL1", "CDELT1", "CRPIX1", "CTYPE1", "CUNIT1"):
-            hdu_normed_flux.header[k] = hdulist[0].header[k]
-            hdu_normed_flux.header.comments[k] = hdulist[0].header.comments[k]
-
-    hdu_normed_flux.header["EXTNAME"] = "normalised_spectrum"
-    hdu_normed_flux.header.comments["EXTNAME"] = "Normalised spectrum flux"
-    hdu_normed_flux.add_checksum()
-
-    hdu_normed_sigma = fits.ImageHDU(data=None, header=None,
-        do_not_scale_image_data=True)
-
-    # Add header information
-    if hdulist is not None:
-        for k in ("CRVAL1", "CDELT1", "CRPIX1", "CTYPE1", "CUNIT1"):
-            hdu_normed_sigma.header[k] = hdulist[0].header[k]
-            hdu_normed_sigma.header.comments[k] = hdulist[0].header.comments[k]
-
-    hdu_normed_sigma.header["EXTNAME"] = "normalised_sigma"
-    hdu_normed_sigma.header.comments["EXTNAME"] = "Normalised flux sigma"
-    hdu_normed_sigma.add_checksum()
-
-    return [hdu_normed_flux, hdu_normed_sigma]
-
-
-def dummy_ccf_hdu(hdulist=None):
-    """
-    Return a dummy HDU for the best-fitting cross-correlation function.
-    """
-
-    hdu_ccf = fits.ImageHDU(data=None, header=None,
-        do_not_scale_image_data=True)
-
-    hdu_ccf.header["EXTNAME"] = "CCF"
-    hdu_ccf.header.comments["EXTNAME"] = "CCF from best-fitting template"
-
-    # Add empty default values.
-    default_headers = [
-        ("VRAD", "Radial velocity (km/s)"),
-        ("U_VRAD", "Uncertainty on radial velocity (km/s)"),
-        ("TEFF", "Effective temperature"),
-        ("LOGG", "Surface gravity"),
-        ("FE_H", "Metallicity ([Fe/H])"),
-        ("ALPHA_FE", "Alpha-enhancement ([alpha/Fe])")
-    ]
-    for key, comment in default_headers:
-        hdu_ccf.header[key] = "NaN"
-        hdu_ccf.header.comments[key] = comment
-    
-    hdu_ccf.add_checksum()
-
-    return hdu_ccf
-
-
-def dummy_no_sky_hdu(hdulist=None):
-    """
-    Return a dummy HDU for the spectrum before sky subtraction.
-    """
-
-    hdu_sky = fits.ImageHDU(data=None, header=None,
-        do_not_scale_image_data=True)
-    hdu_sky.header["EXTNAME"] = "no_sky"
-    hdu_sky.header.comments["EXTNAME"] = "Spectrum before sky subtraction"
-    
-    hdu_sky.add_checksum()
-    return hdu_sky
-
-
 def from_2dfdr(reduced_filename, dummy_hdus=True):
     """
     Returns a list of `astropy.io.fits.hdu.hdulist.HDUList` objects
@@ -153,7 +68,7 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
     ext = read_2dfdr_extensions(image)
 
     # Verifications
-    verify_hermes_origin(image)
+    utils.verify_hermes_origin(image)
 
     # Header modifications.
     keywords = ["NAME", "RA", "DEC", "PMRA", "PMDEC", ("MAGNITUDE", "MAG"),
@@ -175,7 +90,7 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
     ccd_number, ccd_name = get_ccd_number(image)
     header_template["CCD"] = ccd_number
     header_template.comments["CCD"] = "{0} camera".format(ccd_name)
-    header_template["WG6_HASH"] = WG6_GIT_HASH
+    header_template["WG6_HASH"] = utils.WG6_GIT_HASH
     header_template.comments["WG6_HASH"] = "WG6 standardisation commit hash"
     
     extracted_sources = []
@@ -219,8 +134,13 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
         hdu_sigma.header["EXTNAME"] = "input_sigma"
         hdu_sigma.header.comments["EXTNAME"] = "Flux sigma"
 
+        # Calculate the distance to the moon.
+        hdu_flux.header["MOON_DEG"] = motions.moon_distance(hdu_flux.header)
+        hdu_flux.header.comments["MOON_DEG"] \
+            = "Distance to the moon during observing (deg)"
+
         # Calculate the barycentric motion.
-        v_bary, v_helio = motions.from_header(header)
+        v_bary, v_helio = motions.sol_corrections(header)
 
         hdu_flux.header["V_BARY"] = v_bary.to("km/s").value
         hdu_flux.header["V_HELIO"] = v_helio.to("km/s").value
@@ -234,15 +154,16 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
             hdu.header["CRVAL1"] *= 1. + (v_helio/speed_of_light).value
             hdu.header["CDELT1"] *= 1. + (v_helio/speed_of_light).value
 
+
         # Create HDUList and add checksums.
         hdulist = fits.HDUList([hdu_flux, hdu_sigma])
         [hdu.add_checksum() for hdu in hdulist]
 
         # Add dummy extensions
         if dummy_hdus:
-            hdulist.extend(dummy_normalisation_hdus(hdulist))
-            hdulist.append(dummy_ccf_hdu(hdulist))
-            hdulist.append(dummy_no_sky_hdu(hdulist))
+            hdulist.extend(utils.dummy_normalisation_hdus(hdulist))
+            hdulist.append(utils.dummy_ccf_hdu(hdulist))
+            hdulist.append(utils.dummy_no_sky_hdu(hdulist))
 
         extracted_sources.append(hdulist)
 
