@@ -41,7 +41,6 @@ c = speed_of_light.to("km/s").value
 THREADS = 1
 CREATE_FIGURES = False
 UPDATE_FILES = False
-SAVE_BEST_FIT_MODELS = False
 continuum_degree = {
     1: 4,
     2: 4,
@@ -151,84 +150,93 @@ def initial_guess(filename_mask):
         index = np.nanargmax(R)
         ccf_results[filename] = (v[index], v_err[index], R[index], index)
 
-    best_model_indices = [each[-1] for each in ccf_results.values()]
-    v_median = np.nanmedian([each[0] for each in ccf_results.values()])
-    v_err_median = np.nanmedian([each[1] for each in ccf_results.values()])
-    chi_sqs = np.zeros(len(best_model_indices))
-    dofs = np.zeros(len(best_model_indices))
+    if len(ccf_results) > 0:
+        best_model_indices = [each[-1] for each in ccf_results.values()]
+        v_median = np.nanmedian([each[0] for each in ccf_results.values()])
+        v_err_median = np.nanmedian([each[1] for each in ccf_results.values()])
+        chi_sqs = np.zeros(len(best_model_indices))
+        dofs = np.zeros(len(best_model_indices))
 
-    all_coefficients = []
-    for i, index in enumerate(best_model_indices):
+        all_coefficients = []
+        for i, index in enumerate(best_model_indices):
 
-        # For each arm, calculate the best coefficients.
-        index_coefficients = []
-        chi_sq, dof = 0, -len(model_grid.dtype.names)
-        for j, image in enumerate(images):
+            # For each arm, calculate the best coefficients.
+            index_coefficients = []
+            chi_sq, dof = 0, -len(model_grid.dtype.names)
+            for j, image in enumerate(images):
 
+                disp = image[0].header["CRVAL1"] + image[0].header["CDELT1"] \
+                    * (np.arange(image[0].data.size) - image[0].header["CRPIX1"])
+                ccd = image[0].header["CCD"]
+                si, ei = map(sum, (pixels[:ccd - 1], pixels[:ccd]))
+
+                closest_intensities = np.interp(disp,
+                    model_wavelengths[si:ei] * (1. + v_median/c),
+                    model_intensities[index, si:ei], left=1, right=1)
+                continuum = image[0].data/closest_intensities
+
+                # Apply chi-sq mask prior to continuum determination.
+                for start, end in chi_sq_mask:
+                    sj, ej = np.searchsorted(disp, [start, end])
+                    continuum[sj:ej] = np.nan
+
+                finite = np.isfinite(continuum)
+                coefficients = np.polyfit(disp[finite], continuum[finite],
+                    deg=continuum_degree[ccd], w=image[1].data[finite])
+                closest_flux = closest_intensities * np.polyval(coefficients, disp)
+
+                # Apply chi-sq mask to the closest fluxes.
+                for start, end in chi_sq_mask:
+                    sj, ej = np.searchsorted(disp, [start, end])
+                    closest_flux[sj:ej] = np.nan
+
+                chi = (closest_flux - image[0].data)/image[1].data
+                finite = np.isfinite(chi)
+
+                # Update the chi^2 and finite values.
+                chi_sq += np.sum(chi[finite]**2)
+                dof += finite.sum()
+
+                index_coefficients.append(coefficients)
+
+            all_coefficients.append(index_coefficients)
+            chi_sqs[i], dofs[i] = chi_sq, dof
+
+        index = np.nanargmin(chi_sqs/dofs)
+        best_model = model_grid[best_model_indices[index]]
+        coefficients = all_coefficients[index]
+
+        # Update the images with the CCF information.
+        for image in images:
+            image[4].header["VRAD"] = v_median
+            image[4].header["U_VRAD"] = v_err_median
+            image[4].header["TEFF"] = best_model[0]
+            image[4].header["LOGG"] = best_model[1]
+            image[4].header["FE_H"] = best_model[2]
+
+            # Update the checksum.
+            image[4].add_checksum()
+
+        # Update the images with the normalised spectra.
+        for coeffs, image in zip(coefficients, images):
             disp = image[0].header["CRVAL1"] + image[0].header["CDELT1"] \
                 * (np.arange(image[0].data.size) - image[0].header["CRPIX1"])
-            ccd = image[0].header["CCD"]
-            si, ei = map(sum, (pixels[:ccd - 1], pixels[:ccd]))
+            continuum = np.polyval(coeffs, disp)
 
-            closest_intensities = np.interp(disp,
-                model_wavelengths[si:ei] * (1. + v_median/c),
-                model_intensities[index, si:ei], left=1, right=1)
-            continuum = image[0].data/closest_intensities
+            image[2].data = image[0].data/continuum
+            image[3].data = image[1].data/continuum
 
-            # Apply chi-sq mask prior to continuum determination.
-            for start, end in chi_sq_mask:
-                sj, ej = np.searchsorted(disp, [start, end])
-                continuum[sj:ej] = np.nan
+            # Update checksums.
+            image[2].add_checksum()
+            image[3].add_checksum()
 
-            finite = np.isfinite(continuum)
-            coefficients = np.polyfit(disp[finite], continuum[finite],
-                deg=continuum_degree[ccd], w=image[1].data[finite])
-            closest_flux = closest_intensities * np.polyval(coefficients, disp)
+    else:
+        coefficients = [None] * len(images)
 
-            # Apply chi-sq mask to the closest fluxes.
-            for start, end in chi_sq_mask:
-                sj, ej = np.searchsorted(disp, [start, end])
-                closest_flux[sj:ej] = np.nan
-
-            chi = (closest_flux - image[0].data)/image[1].data
-            finite = np.isfinite(chi)
-
-            # Update the chi^2 and finite values.
-            chi_sq += np.sum(chi[finite]**2)
-            dof += finite.sum()
-
-            index_coefficients.append(coefficients)
-
-        all_coefficients.append(index_coefficients)
-        chi_sqs[i], dofs[i] = chi_sq, dof
-
-    index = np.nanargmin(chi_sqs/dofs)
-    best_model = model_grid[best_model_indices[index]]
-    coefficients = all_coefficients[index]
-
-    # Update the images with the CCF information.
-    for image in images:
-        image[4].header["VRAD"] = v_median
-        image[4].header["U_VRAD"] = v_err_median
-        image[4].header["TEFF"] = best_model[0]
-        image[4].header["LOGG"] = best_model[1]
-        image[4].header["FE_H"] = best_model[2]
-
-        # Update the checksum.
-        image[4].add_checksum()
-
-    # Update the images with the normalised spectra.
-    for coeffs, image in zip(coefficients, images):
-        disp = image[0].header["CRVAL1"] + image[0].header["CDELT1"] \
-            * (np.arange(image[0].data.size) - image[0].header["CRPIX1"])
-        continuum = np.polyval(coeffs, disp)
-
-        image[2].data = image[0].data/continuum
-        image[3].data = image[1].data/continuum
-
-        # Update checksums.
-        image[2].add_checksum()
-        image[3].add_checksum()
+    if UPDATE_FILES:
+        for image, filename in zip(images, filenames):
+            print("Updated {}".format(filename))
+            image.writeto(filename, clobber=True)
 
     # Create an image.
     if CREATE_FIGURES:
@@ -239,7 +247,11 @@ def initial_guess(filename_mask):
 
             disp = image[0].header["CRVAL1"] + image[0].header["CDELT1"] \
                     * (np.arange(image[0].data.size) - image[0].header["CRPIX1"])
-            continuum = np.polyval(coeff, disp)
+
+            if coeff is not None:
+                continuum = np.polyval(coeff, disp)
+            else:
+                continuum = 1.
 
             ax.fill_between(disp, (image[0].data - image[1].data)/continuum,
                 (image[0].data + image[1].data)/continuum, facecolor="#BBBBBB",
@@ -249,33 +261,33 @@ def initial_guess(filename_mask):
             ccd = image[0].header["CCD"]
             si, ei = map(sum, (pixels[:ccd - 1], pixels[:ccd]))
 
-            mod_intensities = model_intensities[best_model_indices[index], si:ei]
-            # Apply chi-sq mask.
-            for mask_region in chi_sq_mask:
-                sj, ej = np.searchsorted(
-                    model_wavelengths[si:ei] * (1. + v_median/c), mask_region)
-                mod_intensities[sj:ej] = np.nan
+            if coeff is not None:
 
-            resampled_mod_intensities = np.interp(disp,
-                model_wavelengths[si:ei] * (1. + v_median/c),
-                mod_intensities, left=np.nan, right=np.nan) * continuum
-                
-            if SAVE_BEST_FIT_MODELS:
-                hdu = fits.PrimaryHDU if ax == axes[0] else fits.ImageHDU
-                model_hdus.append(hdu(data=resampled_mod_intensities,
-                    header=image[0].header, do_not_scale_image_data=True))
+                mod_intensities = model_intensities[best_model_indices[index], si:ei]
+                # Apply chi-sq mask.
+                for mask_region in chi_sq_mask:
+                    sj, ej = np.searchsorted(
+                        model_wavelengths[si:ei] * (1. + v_median/c), mask_region)
+                    mod_intensities[sj:ej] = np.nan
 
-            ax.plot(model_wavelengths[si:ei] * (1. + v_median/c), mod_intensities, c='r')
+                resampled_mod_intensities = np.interp(disp,
+                    model_wavelengths[si:ei] * (1. + v_median/c),
+                    mod_intensities, left=np.nan, right=np.nan) * continuum
+
+                ax.plot(model_wavelengths[si:ei] * (1. + v_median/c), mod_intensities, c='r')
+
+                ax.set_ylim(0, 1.2)
+                ax.set_yticks([0, 0.25, 0.50, 0.75, 1.0])
 
             ax.set_xlim(disp[0], disp[-1])
-            ax.set_ylim(0, 1.2)
-            ax.set_yticks([0, 0.25, 0.50, 0.75, 1.0])
+        
+        if len(ccf_results) > 0:
+            axes[0].set_title("TEFF / LOGG / [FE/H] = {0:.0f} / {1:.2f} / {2:.2f} with"\
+                " chi^2/d.o.f = {3:.1f}/{4:.0f} = {5:.1f}".format(
+                    best_model[0], best_model[1], best_model[2],
+                    chi_sqs[index], dofs[index], chi_sqs[index]/dofs[index]),
+                size=10)
 
-        axes[0].set_title("TEFF / LOGG / [FE/H] = {0:.0f} / {1:.2f} / {2:.2f} with"\
-            " chi^2/d.o.f = {3:.1f}/{4:.0f} = {5:.1f}".format(
-                best_model[0], best_model[1], best_model[2],
-                chi_sqs[index], dofs[index], chi_sqs[index]/dofs[index]),
-            size=10)
         axes[-1].set_xlabel("Wavelength")
         fig.tight_layout()
         figure_filename = os.path.join(output_figures_folder,
@@ -283,20 +295,6 @@ def initial_guess(filename_mask):
         fig.savefig(figure_filename)
         print("Created figure {}".format(figure_filename))
         plt.close("all")
-
-    if UPDATE_FILES:
-        for image, filename in zip(images, filenames):
-            print("Updated {}".format(filename))
-            image.writeto(filename, clobber=True)
-
-    if SAVE_BEST_FIT_MODELS:
-        # Save the best fit model of each pixels to a new file.
-        [each.add_checksum() for each in model_hdus]
-        model_filename = os.path.join(output_models_folder,
-            filename_mask.replace("?", "X").replace(".fits", "_ccf_model.fits"))
-        hdulist = fits.HDUList(model_hdus)
-        hdulist.writeto(model_filename)
-        print("Created file {}".format(model_filename))
 
     # Create a table row with heaps of relevant information.
     # FILENAME, RA, DEC, TOTALEXP, NAME, GALAH_ID, UTSTART, UTEND, UTDATE, RUN,
