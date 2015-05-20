@@ -39,7 +39,9 @@ Out[2]:
  <astropy.io.fits.hdu.image.ImageHDU at 0x105794a50>,
  <astropy.io.fits.hdu.image.ImageHDU at 0x1057a73d0>,
  <astropy.io.fits.hdu.image.ImageHDU at 0x1057af650>,
- <astropy.io.fits.hdu.image.ImageHDU at 0x103e5b610>]
+ <astropy.io.fits.hdu.image.ImageHDU at 0x103e5b610>,
+ <astropy.io.fits.hdu.image.ImageHDU at 0x10342ed10>,
+ ]
 ````
 
 Here are the names for each extension (header keyword `EXTNAME`):
@@ -49,6 +51,8 @@ Here are the names for each extension (header keyword `EXTNAME`):
 - `normalised_spectrum`: Normalised spectrum flux
 - `normalised_sigma`: Sigma on normalised spectrum flux
 - `CCF`: Cross-correlation function from best-fitting template
+- `no_sky_spectrum`: The observed spectrum flux before sky subtraction
+- `no_sky_sigma` (TBC): Sigma on the observed spectrum flux before sky subtraction
 
 Note that we have `normalised_flux`, `normalised_sigma`, and `CCF` extensions, but because we haven't normalised or cross-correlated the spectrum yet, there are currently no data in those extensions. You can check to see if there is any data in an extension by checking the `DATASUM` header keyword. When `DATASUM` is zero, there are no data for that extension. We place dummy extensions here so that the analysis groups can be sure they are always referencing the correct data extension. (This is a lesson learned from the Gaia-ESO Survey inserting extensions over time, ruffling feathers with the analysis groups)
 
