@@ -10,7 +10,8 @@ Stacked spectra from a single epoch (e.g., 3 sequential GALAH observations) of t
 - Normalised flux (heliocentric-corrected wavelengths)
 - Normalised sigma
 - Cross-Correlation Function (CCF) from best-fitting template, including associated information
-- Flux before sky subtraction
+- Flux (heliocentric-corrected wavelengths) before sky subtraction
+- TBC: Sigma before sky subtraction
 
 So **if you want flux, you should always take the data from the first extension** (and associated uncertainties from the second extension). Similarly **if you want normalised flux you should always take the data from the third extension**. This is the data format that will go the analysis nodes.
 
@@ -54,6 +55,8 @@ Here are the names for each extension (header keyword `EXTNAME`):
 - `no_sky_spectrum`: The observed spectrum flux before sky subtraction
 - `no_sky_sigma` (TBC): Sigma on the observed spectrum flux before sky subtraction
 
-Note that we have `normalised_flux`, `normalised_sigma`, and `CCF` extensions, but because we haven't normalised or cross-correlated the spectrum yet, there are currently no data in those extensions. You can check to see if there is any data in an extension by checking the `DATASUM` header keyword. When `DATASUM` is zero, there are no data for that extension. We place dummy extensions here so that the analysis groups can be sure they are always referencing the correct data extension. (This is a lesson learned from the Gaia-ESO Survey inserting extensions over time, ruffling feathers with the analysis groups)
+Note that we have `normalised_flux`, `normalised_sigma`, and `CCF` extensions, but because we haven't normalised or cross-correlated the spectrum yet, there are currently no data in those extensions. You can check to see if there is any data in an extension by checking the `DATASUM` header keyword. When `DATASUM` is zero, there are no data for that extension. 
+
+We place dummy extensions here so that the analysis groups can be sure they are always referencing the correct data extension. This is a lesson learned from the Gaia-ESO Survey inserting extensions over time, ruffling feathers with the analysis groups. To future-proof your code we recommend you reference extensions by their `EXTNAME` keyword, but if you just reference extensions by their index you can be assured any additional extensions will only be appended;  **no re-ordering of extensions will happen between major data releases**.
 
 Once ``GUESS`` (Lin & Ireland) or ``oracle`` (Casey) has run over the standardised FITS files, these `normalised_flux`, `normalised_sigma`, and `CCF` extensions will have data present.
