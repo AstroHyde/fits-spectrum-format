@@ -1,17 +1,17 @@
-# GALAH FITS Standard
-This repository describes the GALAH FITS-file format and provides tools to deal with it.
+# GALAH Spectrum FITS Standard
+This repository describes the GALAH spectrum FITS format and provides tools to deal with it.
 
 # Processing Steps
 
-Stacked spectra from a single epoch (e.g., 3 sequential GALAH observations) of the same field will be reduced by  multiple reduction pipelines. Once reduced, they should be converted to the FITS format below so that we have 1 file per star per setup (e.g., `STAR_X_blue.fits`). At this stage the FITS files will have the following extensions:
+Stacked spectra from a single epoch (e.g., 3 sequential GALAH observations) of the same field will be reduced by  multiple reduction pipelines. Once reduced, they should be converted to the FITS format below so that we have 1 file per star per setup (e.g., `STAR_X_blue.fits`). At this stage the FITS files will have the following extensions (`EXTNAME`-header: description):
 
-- Flux (heliocentric-corrected wavelengths)
-- Sigma
-- Normalised flux (heliocentric-corrected wavelengths)
-- Normalised sigma
-- Cross-Correlation Function (CCF) from best-fitting template, including associated information
-- Flux (heliocentric-corrected wavelengths) before sky subtraction
-- TBC: Sigma before sky subtraction
+- `input_spectrum`: Flux (heliocentric-corrected wavelengths)
+- `input_sigma`: Sigma
+- `normalised_spectrum`: Normalised flux (heliocentric-corrected wavelengths)
+- `normalised_sigma`: Normalised sigma
+- `CCF`: Cross-Correlation Function (CCF) from best-fitting template, including associated information
+- `no_sky_spectrum`: Flux (heliocentric-corrected wavelengths) before sky subtraction
+- `no_sky_sigma` (TBC): Sigma before sky subtraction
 
 So **if you want flux, you should always take the data from the first extension** (and associated uncertainties from the second extension). Similarly **if you want normalised flux you should always take the data from the third extension**. This is the data format that will go the analysis nodes.
 
