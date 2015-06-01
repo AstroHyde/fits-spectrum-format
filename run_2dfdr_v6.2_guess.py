@@ -36,10 +36,10 @@ simplefilter("ignore", np.RankWarning)
 c = speed_of_light.to("km/s").value
 
 # CONTROLS
-THREADS = 1
+THREADS = 12
 CLOBBER = False # If False this will skip files that have a normalised spectrum.
-CREATE_FIGURES = False
-UPDATE_FILES = False
+CREATE_FIGURES = True
+UPDATE_FILES = True
 continuum_degree = {
     1: 4,
     2: 4,
@@ -67,8 +67,10 @@ def trace_unhandled_exceptions(func):
         try:
             func(*args, **kwargs)
         except:
-            print("Exception in {}".format(func.__name__))
+            print("Exception in {0}(*{1}, **{2})".format(func.__name__, args, kwargs))
             traceback.print_exc()
+            if 1 >= THREADS:
+                raise
     return wrapped_func
 
 
@@ -106,6 +108,7 @@ def initial_guess(filename_mask, statement=None):
         images.append(fits.open(filename))
         # Check the normalised extension for data
         if i == 0 and images[-1][2].data is not None and not CLOBBER:
+            print("File mask {} already done. No CLOBBER, continuing..".format(filename_mask))
             images[-1].close()
             return None
 
@@ -333,11 +336,6 @@ if THREADS > 1:
 else:
     ok = False
     for i, filename_mask in enumerate(unique_filename_masks):
-        if filename_mask == "140611006?_1641513.fits":
-            ok = True
-        else:
-            if not ok:
-                continue
         initial_guess(filename_mask, i)
 
 
