@@ -1,29 +1,19 @@
-# GALAH FITS Standard
-This repository describes the GALAH FITS-file format and provides tools to deal with it.
+# GALAH Spectrum FITS Standard
+This repository describes the GALAH spectrum FITS format and provides tools to deal with it.
 
 # Processing Steps
 
-Stacked spectra from a single epoch (e.g., 3 sequential GALAH observations) of the same field will be reduced by  multiple reduction pipelines. Once reduced, they should be converted to the FITS format below so that we have 1 file per star per setup (e.g., `STAR_X_blue.fits`). At this stage the FITS files will have the following extensions:
+Stacked spectra from a single epoch (e.g., 3 sequential GALAH observations) of the same field will be reduced by  multiple reduction pipelines. Once reduced, they should be converted to the FITS format below so that we have 1 file per star per setup (e.g., `STAR_X_blue.fits`). At this stage the FITS files will have the following extensions (`EXTNAME`-header: description):
 
-- Flux (barycentric-corrected wavelengths)
-- Sigma
-- Normalised flux (barycentric-corrected wavelengths)
-- Normalised sigma
-- Cross-Correlation Function (CCF) from best-fitting template, including associated information
+- `input_spectrum`: Flux (heliocentric-corrected wavelengths)
+- `input_sigma`: Sigma
+- `normalised_spectrum`: Normalised flux (heliocentric-corrected wavelengths)
+- `normalised_sigma`: Normalised sigma
+- `CCF`: Cross-Correlation Function (CCF) from best-fitting template, including associated information
+- `no_sky_spectrum`: Flux (heliocentric-corrected wavelengths) before sky subtraction
+- `no_sky_sigma` (TBC): Sigma before sky subtraction
 
-For multiple exposures over different epochs, the data will be stacked together and there will be more extensions present:
-
-- Stacked flux (barycentric-corrected wavelengths)
-- Stacked sigma
-- Stacked normalised flux (barycentric-corrected wavelengths)
-- Stacked normalised sigma
-- Cross-Correlation Function (CCF) from best-fitting template, including associated information
-- Flux from epoch 1 (barycentric-corrected wavelengths)
-- Sigma from epoch 1
-- Flux from epoch 2 (barycentric-corrected wavelengths)
-- Sigma from epoch 2
-
-So **if you want the best flux, you should always take the data from the first extension** (and associated uncertainties from the second extension). Similarly **if you want the best normalised flux you should always take the data from the third extension**. This is the data format that will go the analysis nodes.
+So **if you want flux, you should always take the data from the first extension** (and associated uncertainties from the second extension). Similarly **if you want normalised flux you should always take the data from the third extension**. This is the data format that will go the analysis nodes.
 
 # Conversion Example
 
@@ -50,7 +40,9 @@ Out[2]:
  <astropy.io.fits.hdu.image.ImageHDU at 0x105794a50>,
  <astropy.io.fits.hdu.image.ImageHDU at 0x1057a73d0>,
  <astropy.io.fits.hdu.image.ImageHDU at 0x1057af650>,
- <astropy.io.fits.hdu.image.ImageHDU at 0x103e5b610>]
+ <astropy.io.fits.hdu.image.ImageHDU at 0x103e5b610>,
+ <astropy.io.fits.hdu.image.ImageHDU at 0x10342ed10>,
+ ]
 ````
 
 Here are the names for each extension (header keyword `EXTNAME`):
@@ -60,7 +52,11 @@ Here are the names for each extension (header keyword `EXTNAME`):
 - `normalised_spectrum`: Normalised spectrum flux
 - `normalised_sigma`: Sigma on normalised spectrum flux
 - `CCF`: Cross-correlation function from best-fitting template
+- `no_sky_spectrum`: The observed spectrum flux before sky subtraction
+- `no_sky_sigma` (TBC): Sigma on the observed spectrum flux before sky subtraction
 
-Note that we have `normalised_flux`, `normalised_sigma`, and `CCF` extensions, but because we haven't normalised or cross-correlated the spectrum yet, there are currently no data in those extensions. You can check to see if there is any data in an extension by checking the `DATASUM` header keyword. When `DATASUM` is zero, there are no data for that extension. We place dummy extensions here so that the analysis groups can be sure they are always referencing the correct data extension. (This is a lesson learned from the Gaia-ESO Survey inserting extensions over time, ruffling feathers with the analysis groups)
+Note that we have `normalised_flux`, `normalised_sigma`, and `CCF` extensions, but because we haven't normalised or cross-correlated the spectrum yet, there are currently no data in those extensions. You can check to see if there is any data in an extension by checking the `DATASUM` header keyword. When `DATASUM` is zero, there are no data for that extension. 
+
+We place dummy extensions here so that the analysis groups can be sure they are always referencing the correct data extension. This is a lesson learned from the Gaia-ESO Survey inserting extensions over time, ruffling feathers with the analysis groups. To future-proof your code we recommend you reference extensions by their `EXTNAME` keyword, but if you just reference extensions by their index you can be assured any additional extensions will only be appended;  **no re-ordering of extensions will happen between major data releases**.
 
 Once ``GUESS`` (Lin & Ireland) or ``oracle`` (Casey) has run over the standardised FITS files, these `normalised_flux`, `normalised_sigma`, and `CCF` extensions will have data present.

@@ -101,7 +101,6 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
         header = header_template.copy()
 
         # Add header information from the fibre table.
-        header["FIBRE"] = program_index + 1
         fibre_header = image[ext["fibres"]].data[program_index]
         for keyword in keywords:
             if isinstance(keyword, (str, unicode)):
@@ -110,6 +109,8 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
                 from_keyword, to_keyword = keyword
                 header[to_keyword] = fibre_header[from_keyword]
 
+        header["FIBRE"] = program_index + 1
+        
         # The 2dfdr fibre table has the RA and DEC in radians. Who does that?!
         if "RA" in keywords and "DEC" in keywords:
             header["RA"] *= 180./np.pi
@@ -124,6 +125,8 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
             do_not_scale_image_data=True)
         hdu_flux.header["EXTNAME"] = "input_spectrum"
         hdu_flux.header.comments["EXTNAME"] = "Spectrum flux"
+        # For some reason 2DFDR says 'CUNIT1' references units for axis 2
+        hdu_flux.header.comments["CUNIT1"] = "Units for axis 1"
 
         hdu_sigma = fits.ImageHDU(data=variance**0.5, header=None,
             do_not_scale_image_data=True)
@@ -142,10 +145,16 @@ def from_2dfdr(reduced_filename, dummy_hdus=True):
         # Calculate the barycentric motion.
         v_bary, v_helio = motions.sol_corrections(header)
 
-        hdu_flux.header["V_BARY"] = v_bary.to("km/s").value
-        hdu_flux.header["V_HELIO"] = v_helio.to("km/s").value
+        hdu_flux.header["V_BARY"] = np.round(v_bary.to("km/s").value, 2)
+        hdu_flux.header["V_HELIO"] = np.round(v_helio.to("km/s").value, 2)
         hdu_flux.header.comments["V_BARY"] = "Barycentric motion (km/s)"
         hdu_flux.header.comments["V_HELIO"] = "Heliocentric motion (km/s)"
+
+        # Just to be consistent with the IRAF pipeline
+        hdu_flux.header["WG6_VHEL"] = True
+        hdu_flux.header.comments["WG6_VHEL"] \
+            = "Was the V_HELIO correction calculated by WG6?"
+
         hdu_flux.header["HISTORY"] \
             = "Corrected for heliocentric motion (V_HELIO)"
 
