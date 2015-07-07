@@ -41,7 +41,8 @@ def load_GALAH(filename, normalised=False, rest=True, **kwargs):
         bool
     
     :param rest: [optional]
-        If the radial velocity has been measured and put into the headers, return rest frame spectra.
+        If the radial velocity has been measured and put into the headers,
+        return rest frame spectra.
     
     :type rest:
         bool
