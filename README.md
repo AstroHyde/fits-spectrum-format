@@ -15,6 +15,68 @@ Stacked spectra from a single epoch (e.g., 3 sequential GALAH observations) of t
 
 So **if you want flux, you should always take the data from the first extension** (and associated uncertainties from the second extension). Similarly **if you want normalised flux you should always take the data from the third extension**. This is the data format that will go the analysis nodes.
 
+# Load Example
+
+Below (and in `example.py`) you will find an example Python function that will load GALAH spectra. You can select to return normalised or unnormalised spectra, and select whether to correct the spectra for the measured radial velocity.
+
+````python
+
+import numpy as np
+from astropy.io import fits
+
+def load_GALAH(filename, normalised=False, rest=True, **kwargs):
+    """
+    Load a Spectrum1D object from the GALAH standardised FITS format.
+
+    :param filename:
+        The path of the filename to load.
+
+    :type filename:
+        str
+        
+    :param normalised: [optional]
+        Return normalised spectra, if it exists.
+    
+    :type normalised:
+        bool
+    
+    :param rest: [optional]
+        If the radial velocity has been measured and put into the headers, return rest frame spectra.
+    
+    :type rest:
+        bool
+    """
+
+    image = fits.open(filename, **kwargs)
+
+    data_ext = 0 if not normalised else 2
+
+    flux = image[data_ext].data
+    if flux.size == 0 and normalised:
+        raise ValueError("no normalised spectrum found")
+
+    variance = image[data_ext + 1].data
+
+    disp = image[data_ext].header["CRVAL1"] \
+        + (np.arange(flux.size) - image[data_ext].header.get("CRPIX1", 0)) \
+        * image[data_ext].header["CDELT1"]
+
+    header_columns = ["CCD", "WG6_HASH", "NAME", "RA", "DEC",
+        "PMRA", "PMDEC", "MAG", "DESCR", "FIBRE", "MOON_DEG", "V_HELIO"]
+
+    headers = dict(zip(header_columns, [image[0].header.get(k, None) \
+        for k in header_columns]))
+
+    if rest:
+        vrad = image[4].header.get("VRAD", np.nan)
+        if np.isfinite(vrad):
+            disp *= (1 - vrad/299792.458)
+        else:
+            logger.warn("No velocity information found! Spectrum not at rest!")
+
+    return (disp, flux, variance, headers)
+````
+
 # Conversion Example
 
 The code below will extract individual program spectra from a `2DFDR`-reduced image and write them to file.
