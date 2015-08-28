@@ -99,7 +99,7 @@ def read_comments(comments,ymd,run):
 	data=[]
 	try:
 		comments=comments+"/"+str(ymd)+"/comments/"+"comments_%s.txt" % (str(ymd))
-		data=np.loadtxt(comments, dtype=np.str, delimiter=',')
+		data=np.loadtxt(comments, dtype=np.str, delimiter=',', usecols=(0,1))
 		runn=data[:,0]
 	except:
 		return None
@@ -109,15 +109,41 @@ def read_comments(comments,ymd,run):
 	else: return None
 	return obstatus[ind][0]
 
+def replace_right(source, target, replacement, replacements=None):
+	return replacement.join(source.rsplit(target, replacements))
+
 def read_comments2(comments,ymd,run):
 	"""
 	will read comments file and find dome flats
 	"""
 	run=int(run)
 	data=[]
+	#if 1:
 	try:
+		#fix comments file
 		comments=comments+"/"+str(ymd)+"/comments/"+"comments_%s.txt" % (str(ymd))
-		data=np.loadtxt(comments, dtype=np.str, delimiter=',')
+		f=open(comments)
+		outline=[]
+		for line in f:
+			nc= line.count(",")
+			if line[0]=='#': 
+				outline.append(line[:-1])
+			elif nc==4:
+				outline.append(line[:-1])
+			elif nc<4:
+				outline_tmp=line[:-1]
+				for ii in range(4-nc):
+					outline_tmp="".join((outline_tmp,", "))
+				outline.append(outline_tmp.replace("\r", ""))
+			else:
+				outline.append(replace_right(line[:-1],',',' ',nc-4))
+		f.close()
+
+		with open(comments+".fixed", 'w') as f:
+			f.write('\n'.join(outline))
+		
+		#read the fixed file instead	
+		data=np.loadtxt(comments+".fixed", dtype=np.str, delimiter=',')
 		runn=data[:,0]
 	except:
 		return 0
@@ -126,7 +152,7 @@ def read_comments2(comments,ymd,run):
 	ind= np.where(runn==str(run))
 	if len(ind[0])>=1: ind=ind[0]
 	else: return 0
-	if cmt[ind][0].find('dome')!=-1 and cmt[ind][0].find('flat')!=-1:
+	if (cmt[ind][0].find('dome')!=-1 or cmt[ind][0].find('Dome')!=-1) and cmt[ind][0].find('flat')!=-1:
 		return 1
 	else:
 		return 0
@@ -189,7 +215,7 @@ def check_signal(image,ndfclass):
 		scidata = f[0].data
 		f.close()
 
-		if np.average(scidata[0:-1, 1500:2500])<400: return 1
+		if np.average(scidata[0:-1, 1500:2500])<350: return 1
 		else: return 0
 
 def sun_elev(utdate, utstart):
@@ -492,7 +518,7 @@ def main(dbname, user, motherfolder,add,night):
 		n+=1
 		print " + %s/%s creating the table for file" % (n,N), i
 		fullname=i.split("/")
-		if fullname[-2][:4]=='ccd_' and fullname[-1][-5:]==".fits" and len(fullname[-1])==15 and fullname[-3]=='data' and len(fullname[-4])==6: #check if the filename looks fine
+		if fullname[-2][:4]=='ccd_' and fullname[-1][-5:]==".fits" and len(fullname[-1])==15 and fullname[-3]=='data' and len(fullname[-4])==6 and fullname[-5]!='replaced-files': #check if the filename looks fine
 
 			#read parameters of each fits file and set everything
 			key, runkey, dirname, fitsfile, run, cob_id, ccd, plate, cfg_file, meanra, meandec, cenra,cendec, utmjd, ndfclass, ndfclass_updated, fieldid, obsid, exposed, stdname, obstatus, qflag, oclass, airmass, n_of_targets=read_files(i, fullname)
@@ -544,7 +570,7 @@ def main(dbname, user, motherfolder,add,night):
 if __name__=="__main__":
 	#computer/user specific:
 	dbname='hermes_master'#name of the postgresql database. Must be created beforehand
-	user='jkos'#username for the database.
+	user='janez'#username for the database.
 
 	#parse the arguments
 	parser = argparse.ArgumentParser()
